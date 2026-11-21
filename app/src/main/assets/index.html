@@ -148,6 +148,13 @@
     background: rgba(255, 107, 107, .1); color: #ffb3b3;
     font-size: 12px; line-height: 1.5; word-break: break-word;
   }
+  .src-error .link-btn {
+    display: inline-block; margin-top: 6px; padding: 0; border: 0;
+    background: none; color: #ffd18a; font: inherit; font-size: 12px;
+    font-weight: 600; text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
+  }
+  .src-error .link-btn:disabled { opacity: .6; text-decoration: none; }
+  .src-error .err-note { display: block; margin-top: 6px; color: #ffd18a; }
   .src-actions { display: flex; gap: 2px; flex: 0 0 auto; }
 
   .empty { text-align: center; padding: 26px 16px; border: 1px dashed var(--line-strong); border-radius: 14px; }
@@ -771,7 +778,23 @@
       if (src.lastError) {
         var err = document.createElement('p');
         err.className = 'src-error';
-        err.textContent = '上次刷新失败：' + src.lastError;
+        err.appendChild(document.createTextNode('上次刷新失败：' + src.lastError));
+        if (/TLS|SSL|证书/i.test(src.lastError)) {
+          if (!state.settings.insecureTls) {
+            var fix = document.createElement('button');
+            fix.type = 'button';
+            fix.className = 'link-btn';
+            fix.textContent = '开启兼容模式并重试';
+            fix.onclick = function () { enableTlsAndRetry(src, fix); };
+            err.appendChild(document.createElement('br'));
+            err.appendChild(fix);
+          } else {
+            var note = document.createElement('span');
+            note.className = 'err-note';
+            note.textContent = '兼容模式已开启仍失败，源站可能只支持 TLS 1.3，Android 5.1 无法连接，建议更换源。';
+            err.appendChild(note);
+          }
+        }
         li.appendChild(err);
       }
       list.appendChild(li);
@@ -864,6 +887,31 @@
     }).then(function () {
       btn.disabled = false;
       btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>';
+    });
+  }
+
+  function enableTlsAndRetry(src, btn) {
+    btn.disabled = true;
+    btn.textContent = '正在重试…';
+    postJSON('/api/config', { insecureTls: true }).then(function () {
+      state.settings.insecureTls = true;
+      $('insecureTls').checked = true;
+      clearDirty();
+      return postJSON('/api/source/refresh', { id: src.id });
+    }).then(function (data) {
+      if (data && data.error) {
+        toast('仍然失败：' + data.error, true);
+      } else if (data && data.count > 0) {
+        toast('已刷新 ' + data.count + ' 个频道');
+      } else {
+        toast('没有解析到频道，请检查源格式', true);
+      }
+      refreshSources();
+      loadStatus();
+    }).catch(function (err) {
+      toast(err.message, true);
+      btn.disabled = false;
+      btn.textContent = '开启兼容模式并重试';
     });
   }
 

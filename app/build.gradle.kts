@@ -22,8 +22,8 @@ android {
         applicationId = "com.lean.tv"
         minSdk = 22
         targetSdk = 22
-        versionCode = 7
-        versionName = "1.2.1"
+        versionCode = 8
+        versionName = "1.2.2"
     }
 
     buildFeatures {
