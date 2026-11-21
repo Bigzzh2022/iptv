@@ -285,6 +285,8 @@
       return loadConfig();
     }).then(function () {
       toast('已添加，频道正在后台更新');
+      // 后台解析完成后回读一次，更新 lastUpdate 与频道状态
+      setTimeout(function () { loadConfig().catch(function () {}); }, 4000);
     }).catch(function (err) {
       toast(err.message, true);
       loadConfig().catch(function () {});

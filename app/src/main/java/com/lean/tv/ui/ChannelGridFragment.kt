@@ -4,7 +4,9 @@ import android.os.Bundle
 import android.view.View
 import androidx.leanback.app.VerticalGridSupportFragment
 import androidx.leanback.widget.VerticalGridPresenter
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.lean.tv.App
 import kotlinx.coroutines.launch
 
@@ -24,14 +26,13 @@ class ChannelGridFragment : VerticalGridSupportFragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        reload()
-    }
-
-    fun reload() {
-        if (!isAdded || view == null) return
+        // Room Flow：订阅源在 Web 端保存并刷新后，频道列表会自动推送到电视端
         viewLifecycleOwner.lifecycleScope.launch {
-            val channels = App.repository.channels()
-            channelAdapter.submit(channels)
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                App.repository.observeChannels().collect { channels ->
+                    channelAdapter.submit(channels)
+                }
+            }
         }
     }
 

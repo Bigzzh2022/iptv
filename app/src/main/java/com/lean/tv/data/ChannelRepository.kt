@@ -8,12 +8,14 @@ import com.lean.tv.parser.PlaylistParser
 import com.lean.tv.parser.TxtParser
 import com.lean.tv.util.Http
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import okhttp3.Request
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.Charset
 import java.nio.charset.CodingErrorAction
+import android.util.Log
 
 data class SourceInput(
     val id: Long,
@@ -36,6 +38,11 @@ class ChannelRepository(private val db: AppDatabase) {
         db.channelDao().all()
     }
 
+    /** 频道列表变化时自动推送，供电视端 UI 实时刷新。 */
+    fun observeChannels(): Flow<List<ChannelEntity>> = db.channelDao().observeAll()
+
+    fun observeChannelCount(): Flow<Int> = db.channelDao().observeCount()
+
     suspend fun channelCount(): Int = withContext(Dispatchers.IO) {
         db.channelDao().count()
     }
@@ -50,13 +57,13 @@ class ChannelRepository(private val db: AppDatabase) {
         }
 
     /**
-     * 用前端提交的完整订阅源列表覆盖本地配置，返回新增源的 id。
-     * 新增源的刷新由调用方放入后台，避免阻塞 HTTP 请求。
+     * 用前端提交的完整订阅源列表覆盖本地配置，返回需要刷新频道的源 id
+     * （新增或 URL/类型有变化的源）。刷新由调用方放入后台，避免阻塞 HTTP 请求。
      */
     suspend fun syncSources(inputs: List<SourceInput>): List<Long> = withContext(Dispatchers.IO) {
         val current = db.sourceDao().all().associateBy { it.id }
         val submittedIds = inputs.map { it.id }.filter { it > 0L }.toSet()
-        val addedIds = ArrayList<Long>()
+        val refreshIds = LinkedHashSet<Long>()
 
         db.withTransaction {
             current.values
@@ -76,9 +83,10 @@ class ChannelRepository(private val db: AppDatabase) {
                         db.sourceDao().update(
                             existing.copy(name = input.name, url = input.url, type = input.type)
                         )
+                        refreshIds.add(existing.id)
                     }
                 } else {
-                    addedIds.add(
+                    refreshIds.add(
                         db.sourceDao().insert(
                             SourceEntity(name = input.name, url = input.url, type = input.type)
                         )
@@ -86,7 +94,7 @@ class ChannelRepository(private val db: AppDatabase) {
                 }
             }
         }
-        addedIds
+        refreshIds.toList()
     }
 
     /**
@@ -97,6 +105,7 @@ class ChannelRepository(private val db: AppDatabase) {
         val text = try {
             fetchText(source.url)
         } catch (e: Exception) {
+            Log.w(TAG, "下载订阅源失败: ${source.url}", e)
             null
         } ?: return@withContext -1
 
@@ -107,7 +116,10 @@ class ChannelRepository(private val db: AppDatabase) {
         }
 
         val parsed = parser.parse(text)
-        if (parsed.isEmpty()) return@withContext 0
+        if (parsed.isEmpty()) {
+            Log.w(TAG, "未解析到频道: ${source.url}")
+            return@withContext 0
+        }
 
         val entities = parsed.map {
             ChannelEntity(
@@ -125,7 +137,9 @@ class ChannelRepository(private val db: AppDatabase) {
             db.channelDao().insertAll(entities)
             db.sourceDao().markUpdated(source.id, now)
         }
-        entities.size
+        entities.size.also {
+            Log.i(TAG, "订阅源 ${source.name} 刷新完成: $it 个频道")
+        }
     }
 
     private fun fetchText(url: String): String? {
@@ -159,6 +173,7 @@ class ChannelRepository(private val db: AppDatabase) {
     }
 
     private companion object {
+        const val TAG = "ChannelRepository"
         const val MAX_SOURCE_BYTES = 32L * 1024 * 1024
     }
 }

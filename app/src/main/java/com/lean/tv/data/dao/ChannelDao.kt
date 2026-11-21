@@ -5,12 +5,16 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.lean.tv.data.entity.ChannelEntity
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ChannelDao {
 
     @Query("SELECT * FROM channels ORDER BY id ASC")
     suspend fun all(): List<ChannelEntity>
+
+    @Query("SELECT * FROM channels ORDER BY id ASC")
+    fun observeAll(): Flow<List<ChannelEntity>>
 
     @Query("SELECT * FROM channels WHERE sourceId = :sourceId ORDER BY id ASC")
     suspend fun bySource(sourceId: Long): List<ChannelEntity>
@@ -26,6 +30,9 @@ interface ChannelDao {
 
     @Query("SELECT COUNT(*) FROM channels")
     suspend fun count(): Int
+
+    @Query("SELECT COUNT(*) FROM channels")
+    fun observeCount(): Flow<Int>
 
     @Query("SELECT COUNT(*) FROM channels WHERE sourceId = :sourceId")
     suspend fun countBySource(sourceId: Long): Int

@@ -120,8 +120,8 @@ class ApiRouter(private val context: Context) {
         }
         if (json.has("sources")) {
             val inputs = parseSources(json.optJSONArray("sources") ?: JSONArray())
-            val addedIds = runBlocking { App.repository.syncSources(inputs) }
-            addedIds.forEach { id ->
+            val refreshIds = runBlocking { App.repository.syncSources(inputs) }
+            refreshIds.forEach { id ->
                 App.appScope.launch {
                     App.repository.source(id)?.let { App.repository.refreshSource(it) }
                 }
