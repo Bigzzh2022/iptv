@@ -4,10 +4,12 @@ import android.app.ActivityManager
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -16,6 +18,7 @@ import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.lean.tv.App
+import com.lean.tv.data.ConfigStore
 import com.lean.tv.data.DecoderMode
 import com.lean.tv.util.Http
 import kotlinx.coroutines.launch
@@ -29,6 +32,7 @@ import kotlinx.coroutines.launch
  */
 object PlayerManager {
 
+    private const val TAG = "PlayerManager"
     private const val MIN_BUFFER_MS = 15_000
     private const val MAX_BUFFER_MS = 50_000
     private const val BUFFER_FOR_PLAYBACK_MS = 1_500
@@ -117,6 +121,7 @@ object PlayerManager {
         val dataSourceFactory = DefaultDataSource.Factory(
             context,
             OkHttpDataSource.Factory(Http.client)
+                .setUserAgent(ConfigStore.userAgent)
         )
 
         val loadControl = DefaultLoadControl.Builder()
@@ -157,18 +162,40 @@ object PlayerManager {
     }
 
     private fun handlePlaybackError(error: PlaybackException) {
+        val url = urls.getOrNull(urlIndex).orEmpty()
+        Log.e(TAG, "播放失败 ${error.errorCodeName} url=$url", error)
+
         if (urlIndex + 1 < urls.size) {
+            Log.w(TAG, "切换备用线路 ${urlIndex + 2}/${urls.size}")
             urlIndex++
             prepareCurrent()
             return
         }
-        if (!softwareDecode && softwareRetry < MAX_SOFTWARE_RETRY) {
+        // 网络/HTTP 错误换软解没有意义，只对解码类错误做降级
+        if (!softwareDecode && softwareRetry < MAX_SOFTWARE_RETRY && isDecoderError(error)) {
             softwareRetry++
             softwareDecode = true
             rebuildPlayer()
             return
         }
-        onError?.invoke("播放失败：${error.errorCodeName}")
+        onError?.invoke(describe(error))
+    }
+
+    private fun isDecoderError(error: PlaybackException): Boolean =
+        error.errorCode == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ||
+            error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED ||
+            error.errorCode == PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED
+
+    /** 优先把 HTTP 状态码暴露给用户，403 通常是 UA / 防盗链问题。 */
+    private fun describe(error: PlaybackException): String {
+        var cause: Throwable? = error.cause
+        while (cause != null) {
+            if (cause is HttpDataSource.InvalidResponseCodeException) {
+                return "播放失败：HTTP ${cause.responseCode}"
+            }
+            cause = cause.cause
+        }
+        return "播放失败：${error.errorCodeName}"
     }
 
     private val playerListener = object : Player.Listener {

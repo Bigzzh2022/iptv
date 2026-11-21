@@ -145,11 +145,14 @@ class ChannelRepository(private val db: AppDatabase) {
     private fun fetchText(url: String): String? {
         val request = Request.Builder()
             .url(url)
-            .header("User-Agent", "LeanIPTV/1.0")
+            .header("User-Agent", ConfigStore.userAgent)
             .build()
 
         Http.client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return null
+            if (!response.isSuccessful) {
+                Log.w(TAG, "订阅源 HTTP ${response.code}: $url")
+                return null
+            }
             val body = response.body ?: return null
             if (body.contentLength() > MAX_SOURCE_BYTES) return null
             val bytes = body.bytes()

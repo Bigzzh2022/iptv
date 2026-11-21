@@ -3,6 +3,7 @@ package com.lean.tv.server
 import android.app.ActivityManager
 import android.content.Context
 import com.lean.tv.App
+import com.lean.tv.BuildConfig
 import com.lean.tv.data.ConfigStore
 import com.lean.tv.data.DecoderMode
 import com.lean.tv.data.SourceInput
@@ -58,6 +59,7 @@ class ApiRouter(private val context: Context) {
                 put("port", ConfigStore.httpPort)
                 put("epgUrl", ConfigStore.epgUrl)
                 put("decoder", ConfigStore.decoderMode)
+                put("userAgent", ConfigStore.userAgent)
                 put("sources", JSONArray().apply {
                     sources.forEach { source ->
                         put(JSONObject().apply {
@@ -94,7 +96,7 @@ class ApiRouter(private val context: Context) {
             put("totalMb", memoryInfo.totalMem / MB)
             put("channelCount", counts.first)
             put("sourceCount", counts.second)
-            put("version", "1.0.0")
+            put("version", BuildConfig.VERSION_NAME)
         }
         return ok(data)
     }
@@ -117,6 +119,9 @@ class ApiRouter(private val context: Context) {
             if (DecoderMode.isValid(decoder)) {
                 ConfigStore.decoderMode = decoder
             }
+        }
+        if (json.has("userAgent")) {
+            ConfigStore.userAgent = json.optString("userAgent")
         }
         if (json.has("sources")) {
             val inputs = parseSources(json.optJSONArray("sources") ?: JSONArray())
