@@ -5,6 +5,7 @@ import com.lean.tv.data.ConfigStore
 import okhttp3.Dns
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
+import java.net.Inet6Address
 import java.net.InetAddress
 import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
@@ -33,7 +34,9 @@ object Http {
                 val entry = cache[hostname]
                 if (entry != null && entry.expiresAt > now) return entry.addresses
             }
+            // 老电视的 IPv6 路由通常不可用，优先尝试 IPv4 地址
             val addresses = Dns.SYSTEM.lookup(hostname)
+                .sortedBy { if (it is Inet6Address) 1 else 0 }
             synchronized(cache) {
                 if (cache.size >= 64) cache.clear()
                 cache[hostname] = DnsEntry(addresses, now + DNS_TTL_MS)

@@ -50,6 +50,7 @@
 | POST | `/api/config` | 更新设置或整体同步订阅源列表 |
 | POST | `/api/source/refresh` | 同步刷新指定订阅源，body：`{"id": 1}`，返回 `count` 或 `error` |
 | POST | `/api/source/refresh-all` | 依次刷新全部订阅源 |
+| POST | `/api/probe` | 从电视网络探测拉流地址，body：`{"url": "http://..."}`，返回 `reachable`/`status`/`ms` 或 `error` |
 | GET | `/api/channels` | 频道预览，参数 `q`（名称/分组搜索）、`limit`（默认 200，最大 500） |
 | GET | `/api/status` | 电视 IP、版本、内存占用、频道数/源数量、正在刷新数 |
 

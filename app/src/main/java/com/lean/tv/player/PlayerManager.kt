@@ -23,6 +23,10 @@ import com.lean.tv.data.ConfigStore
 import com.lean.tv.data.DecoderMode
 import com.lean.tv.util.Http
 import kotlinx.coroutines.launch
+import java.net.ConnectException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import javax.net.ssl.SSLException
 
 /**
  * 单例播放器：面向 Android 5.1.1 低性能设备。
@@ -46,6 +50,9 @@ object PlayerManager {
     private var urlIndex = 0
     private var softwareRetry = 0
 
+    /** 构建播放器时使用的 TLS 兼容开关，运行中被修改后需要重建播放器。 */
+    private var builtInsecure = false
+
     var onPlayerChanged: ((ExoPlayer) -> Unit)? = null
     var onError: ((String) -> Unit)? = null
 
@@ -63,8 +70,15 @@ object PlayerManager {
     fun player(): ExoPlayer? = exoPlayer
 
     fun play(urlList: List<String>) {
-        val list = urlList.filter { it.isNotBlank() }.distinct()
-        if (list.isEmpty()) return
+        // 只接受 HTTP/HTTPS，其它协议（rtmp/rtsp 等）ExoPlayer 官方不支持
+        val list = urlList
+            .map { it.trim() }
+            .filter { it.startsWith("http://", true) || it.startsWith("https://", true) }
+            .distinct()
+        if (list.isEmpty()) {
+            onError?.invoke("播放失败：线路地址不是 HTTP/HTTPS，暂不支持")
+            return
+        }
 
         urls = list
         urlIndex = 0
@@ -128,6 +142,8 @@ object PlayerManager {
             .setBufferDurationsMs(durations[0], durations[1], durations[2], durations[3])
             .build()
 
+        builtInsecure = ConfigStore.insecureTls
+
         return ExoPlayer.Builder(context, renderersFactory)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
             .setLoadControl(loadControl)
@@ -137,6 +153,12 @@ object PlayerManager {
 
     private fun prepareCurrent() {
         if (urls.isEmpty()) return
+        // 配置页可能在播放器已创建后切换「兼容旧电视 TLS」，此时必须重建播放器才会生效
+        if (exoPlayer != null && builtInsecure != ConfigStore.insecureTls) {
+            Log.i(TAG, "TLS 兼容开关已变化，重建播放器")
+            rebuildPlayer()
+            return
+        }
         val player = ensurePlayer()
         player.setMediaItem(MediaItem.fromUri(urls[urlIndex]))
         player.prepare()
@@ -181,12 +203,21 @@ object PlayerManager {
             error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED ||
             error.errorCode == PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED
 
-    /** 优先把 HTTP 状态码暴露给用户，403 通常是 UA / 防盗链问题。 */
+    /** 优先把具体网络原因暴露给用户，便于定位是 DNS、TLS 还是端口问题。 */
     private fun describe(error: PlaybackException): String {
         var cause: Throwable? = error.cause
         while (cause != null) {
-            if (cause is HttpDataSource.InvalidResponseCodeException) {
-                return "播放失败：HTTP ${cause.responseCode}"
+            when (cause) {
+                is HttpDataSource.InvalidResponseCodeException ->
+                    return "播放失败：HTTP ${cause.responseCode}（源站拒绝访问）"
+                is UnknownHostException ->
+                    return "播放失败：域名解析失败，请检查电视网络"
+                is SSLException ->
+                    return "播放失败：TLS 握手失败（可开启兼容旧电视 TLS）"
+                is SocketTimeoutException ->
+                    return "播放失败：连接超时，线路可能不可用"
+                is ConnectException ->
+                    return "播放失败：无法连接服务器（端口拒绝或线路失效）"
             }
             cause = cause.cause
         }

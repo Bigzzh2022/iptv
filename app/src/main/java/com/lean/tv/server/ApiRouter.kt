@@ -2,6 +2,7 @@ package com.lean.tv.server
 
 import android.app.ActivityManager
 import android.content.Context
+import android.os.SystemClock
 import com.lean.tv.App
 import com.lean.tv.BuildConfig
 import com.lean.tv.data.AspectMode
@@ -9,15 +10,22 @@ import com.lean.tv.data.BufferProfile
 import com.lean.tv.data.ConfigStore
 import com.lean.tv.data.DecoderMode
 import com.lean.tv.data.SourceInput
+import com.lean.tv.util.Http
 import com.lean.tv.util.NetUtils
 import fi.iki.elonen.NanoHTTPD.IHTTPSession
 import fi.iki.elonen.NanoHTTPD.Method
 import fi.iki.elonen.NanoHTTPD.Response
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
+import java.net.ConnectException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLException
 
 /**
  * 极简 REST 路由。运行在 NanoHTTPD 的工作线程上，
@@ -41,6 +49,7 @@ class ApiRouter(private val context: Context) {
             method == Method.POST && uri == "/api/config" -> postConfig(session)
             method == Method.POST && uri == "/api/source/refresh" -> postRefresh(session)
             method == Method.POST && uri == "/api/source/refresh-all" -> postRefreshAll()
+            method == Method.POST && uri == "/api/probe" -> postProbe(session)
             else -> error(Response.Status.NOT_FOUND, "接口不存在")
         }
     }
@@ -226,6 +235,66 @@ class ApiRouter(private val context: Context) {
             put("started", true)
             put("count", count)
         })
+    }
+
+    /**
+     * 从电视当前网络直接探测拉流地址：只请求 1 字节（Range），8 秒超时。
+     * 用来区分「源不可用」和「电视连不上」，失败也返回 200 + reachable=false。
+     */
+    private fun postProbe(session: IHTTPSession): HttpResult {
+        val url = try {
+            JSONObject(readBody(session)).optString("url").trim()
+        } catch (e: JSONException) {
+            return error(Response.Status.BAD_REQUEST, "JSON 格式错误")
+        }
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+            return error(Response.Status.BAD_REQUEST, "仅支持 HTTP/HTTPS 地址")
+        }
+
+        val started = SystemClock.elapsedRealtime()
+        val client = Http.clientFor(url).newBuilder()
+            .connectTimeout(8, TimeUnit.SECONDS)
+            .readTimeout(8, TimeUnit.SECONDS)
+            .build()
+        val request = Request.Builder()
+            .url(url)
+            .header("Range", "bytes=0-1")
+            .header("User-Agent", ConfigStore.userAgent)
+            .get()
+            .build()
+
+        val data = try {
+            client.newCall(request).execute().use { response ->
+                JSONObject().apply {
+                    put("reachable", true)
+                    put("status", response.code)
+                    put("ms", SystemClock.elapsedRealtime() - started)
+                    put("contentType", response.header("Content-Type").orEmpty())
+                    put("finalUrl", response.request.url.toString())
+                }
+            }
+        } catch (e: Exception) {
+            JSONObject().apply {
+                put("reachable", false)
+                put("ms", SystemClock.elapsedRealtime() - started)
+                put("error", probeError(e))
+            }
+        }
+        return ok(data)
+    }
+
+    private fun probeError(e: Throwable): String {
+        var cause: Throwable? = e
+        while (cause != null) {
+            when (cause) {
+                is UnknownHostException -> return "域名解析失败，请检查电视网络"
+                is SSLException -> return "TLS 握手失败（可开启兼容旧电视 TLS）"
+                is SocketTimeoutException -> return "连接超时"
+                is ConnectException -> return "无法连接服务器（端口拒绝）"
+            }
+            cause = cause.cause
+        }
+        return e.message ?: e.javaClass.simpleName
     }
 
     private fun parseSources(array: JSONArray): List<SourceInput> {

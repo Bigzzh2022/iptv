@@ -303,6 +303,13 @@
   .ch-name { font-size: 14px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ch-sub { margin-top: 2px; color: var(--faint); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ch-group { flex: 0 0 auto; max-width: 90px; padding: 2px 7px; border-radius: 6px; background: rgba(255, 255, 255, .06); color: var(--muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ch-probe {
+    flex: 0 0 auto; min-height: 30px; padding: 0 10px; border-radius: 8px;
+    border: 1px solid var(--line-strong); background: transparent; color: var(--muted);
+    font: inherit; font-size: 12px; white-space: nowrap; cursor: pointer;
+  }
+  .ch-probe:active { background: var(--surface-2); }
+  .ch-probe:disabled { opacity: .55; cursor: default; }
 </style>
 </head>
 <body>
@@ -988,6 +995,31 @@
         group.textContent = channel.group;
         row.appendChild(group);
       }
+
+      // 从电视所在网络直接探测该拉流地址，定位「源挂了」还是「电视连不上」
+      var probe = document.createElement('button');
+      probe.type = 'button';
+      probe.className = 'ch-probe';
+      probe.textContent = '检测';
+      probe.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (probe.disabled) return;
+        probe.disabled = true;
+        probe.textContent = '检测中';
+        postJSON('/api/probe', { url: channel.url }).then(function (result) {
+          if (result.reachable) {
+            probe.textContent = 'HTTP ' + result.status;
+            toast('可访问 HTTP ' + result.status + ' · ' + result.ms + 'ms');
+          } else {
+            probe.textContent = '不可达';
+            toast('不可达：' + (result.error || '未知原因') + '（' + result.ms + 'ms）', true);
+          }
+        }).catch(function (err) {
+          probe.textContent = '检测失败';
+          toast(err.message, true);
+        }).then(function () { probe.disabled = false; });
+      });
+      row.appendChild(probe);
 
       row.addEventListener('click', function () {
         copyText(channel.url).then(function () {
