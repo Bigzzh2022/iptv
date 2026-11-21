@@ -70,14 +70,18 @@ class ApiRouter(private val context: Context) {
                 put("userAgent", ConfigStore.userAgent)
                 put("bufferProfile", ConfigStore.bufferProfile)
                 put("aspectMode", ConfigStore.aspectMode)
+                put("insecureTls", ConfigStore.insecureTls)
                 put("sources", JSONArray().apply {
                     sources.forEach { source ->
+                        val state = App.repository.refreshState(source.id)
                         put(JSONObject().apply {
                             put("id", source.id)
                             put("name", source.name)
                             put("url", source.url)
                             put("type", source.type)
                             put("lastUpdate", source.lastUpdate)
+                            put("channelCount", App.repository.channelCount(source.id))
+                            if (state?.error != null) put("lastError", state.error)
                         })
                     }
                 })
@@ -169,6 +173,9 @@ class ApiRouter(private val context: Context) {
             val aspect = json.optString("aspectMode").trim()
             if (AspectMode.isValid(aspect)) ConfigStore.aspectMode = aspect
         }
+        if (json.has("insecureTls")) {
+            ConfigStore.insecureTls = json.optBoolean("insecureTls", false)
+        }
         if (json.has("sources")) {
             val inputs = parseSources(json.optJSONArray("sources") ?: JSONArray())
             val refreshIds = runBlocking { App.repository.syncSources(inputs) }
@@ -196,10 +203,15 @@ class ApiRouter(private val context: Context) {
         val source = runBlocking { App.repository.source(id) }
             ?: return error(Response.Status.NOT_FOUND, "订阅源不存在")
 
-        App.appScope.launch {
-            App.repository.refreshSource(source)
-        }
-        return ok(JSONObject().apply { put("started", true) })
+        // 同步执行，让配置页立即拿到成功数量或具体失败原因
+        val count = runBlocking { App.repository.refreshSource(source) }
+        val lastUpdate = runBlocking { App.repository.source(id)?.lastUpdate ?: 0L }
+        val state = App.repository.refreshState(id)
+        return ok(JSONObject().apply {
+            put("count", count)
+            put("lastUpdate", lastUpdate)
+            if (state?.error != null) put("error", state.error)
+        })
     }
 
     /** 依次刷新所有订阅源，避免同时下载拖垮老电视。 */

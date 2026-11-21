@@ -142,6 +142,12 @@
   .src-meta { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); min-width: 0; }
   .src-meta .ok { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: 0 0 auto; }
   .src-meta .none { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); flex: 0 0 auto; }
+  .src-meta .bad { width: 6px; height: 6px; border-radius: 50%; background: var(--danger); flex: 0 0 auto; }
+  .src-error {
+    margin: 8px 0 0; padding: 8px 10px; border-radius: 9px;
+    background: rgba(255, 107, 107, .1); color: #ffb3b3;
+    font-size: 12px; line-height: 1.5; word-break: break-word;
+  }
   .src-actions { display: flex; gap: 2px; flex: 0 0 auto; }
 
   .empty { text-align: center; padding: 26px 16px; border: 1px dashed var(--line-strong); border-radius: 14px; }
@@ -170,6 +176,26 @@
     border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 12px; cursor: pointer;
   }
   .chips button:active { background: var(--surface-2); }
+
+  /* 开关 */
+  .switch-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    margin-top: 16px; cursor: pointer;
+  }
+  .switch-row b { display: block; font-size: 14px; font-weight: 600; color: var(--text); }
+  .switch-row small { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+  .switch-row input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  .switch-row i {
+    flex: 0 0 auto; width: 44px; height: 26px; border-radius: 13px;
+    background: #2a313a; position: relative; transition: background .18s;
+  }
+  .switch-row i::after {
+    content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px;
+    border-radius: 50%; background: #8d97a5; transition: transform .18s, background .18s;
+  }
+  .switch-row input:checked + i { background: rgba(55, 211, 155, .35); }
+  .switch-row input:checked + i::after { transform: translateX(18px); background: var(--accent); }
+  .switch-row input:focus-visible + i { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   /* 分段控件 */
   .segmented { display: flex; gap: 4px; padding: 4px; background: var(--bg-soft); border: 1px solid var(--line); border-radius: 12px; }
@@ -404,6 +430,14 @@
           <span>EPG 接口地址（可选）</span>
           <input id="epg" type="url" placeholder="http://example.com/epg.xml" autocomplete="off" />
         </label>
+        <label class="switch-row" for="insecureTls">
+          <span>
+            <b>兼容旧电视 TLS</b>
+            <small>忽略 HTTPS 证书错误，仅当电视提示 TLS 握手失败时临时开启</small>
+          </span>
+          <input type="checkbox" id="insecureTls" />
+          <i aria-hidden="true"></i>
+        </label>
       </div>
 
       <button class="btn primary block" id="saveBtn" type="button">
@@ -523,7 +557,7 @@
 
   var state = {
     sources: [],
-    settings: { decoder: 'auto', buffer: 'balanced', aspect: 'fit' },
+    settings: { decoder: 'auto', buffer: 'balanced', aspect: 'fit', insecureTls: false },
     status: null,
     editing: null,
     confirmAction: null,
@@ -693,9 +727,12 @@
       var meta = document.createElement('span');
       meta.className = 'src-meta';
       var dot = document.createElement('i');
-      dot.className = src.lastUpdate ? 'ok' : 'none';
+      dot.className = src.lastError ? 'bad' : src.lastUpdate ? 'ok' : 'none';
       var metaText = document.createElement('span');
-      metaText.textContent = fmtRelative(src.lastUpdate);
+      var metaParts = [];
+      if (typeof src.channelCount === 'number') metaParts.push(src.channelCount + ' 个频道');
+      metaParts.push(fmtRelative(src.lastUpdate));
+      metaText.textContent = metaParts.join(' · ');
       if (src.lastUpdate) meta.title = new Date(src.lastUpdate).toLocaleString();
       meta.appendChild(dot);
       meta.appendChild(metaText);
@@ -731,6 +768,12 @@
       li.appendChild(head);
       li.appendChild(url);
       li.appendChild(foot);
+      if (src.lastError) {
+        var err = document.createElement('p');
+        err.className = 'src-error';
+        err.textContent = '上次刷新失败：' + src.lastError;
+        li.appendChild(err);
+      }
       list.appendChild(li);
     });
   }
@@ -806,9 +849,16 @@
     }
     btn.disabled = true;
     btn.innerHTML = '<span class="spin"></span>';
-    postJSON('/api/source/refresh', { id: src.id }).then(function () {
-      toast('已开始刷新');
-      pollAfterRefresh();
+    postJSON('/api/source/refresh', { id: src.id }).then(function (data) {
+      if (data && data.error) {
+        toast('刷新失败：' + data.error, true);
+      } else if (data && data.count > 0) {
+        toast('已刷新 ' + data.count + ' 个频道');
+      } else {
+        toast('没有解析到频道，请检查源格式', true);
+      }
+      refreshSources();
+      loadStatus();
     }).catch(function (err) {
       toast(err.message, true);
     }).then(function () {
@@ -910,8 +960,10 @@
       state.settings.decoder = cfg.decoder || 'auto';
       state.settings.buffer = cfg.bufferProfile || 'balanced';
       state.settings.aspect = cfg.aspectMode || 'fit';
+      state.settings.insecureTls = !!cfg.insecureTls;
       $('ua').value = cfg.userAgent || '';
       $('epg').value = cfg.epgUrl || '';
+      $('insecureTls').checked = state.settings.insecureTls;
       setSegment('decoderGroup', state.settings.decoder);
       setSegment('bufferGroup', state.settings.buffer);
       setSegment('aspectGroup', state.settings.aspect);
@@ -929,7 +981,8 @@
       decoder: state.settings.decoder,
       userAgent: $('ua').value.trim(),
       bufferProfile: state.settings.buffer,
-      aspectMode: state.settings.aspect
+      aspectMode: state.settings.aspect,
+      insecureTls: $('insecureTls').checked
     }).then(function () {
       toast('设置已保存');
       clearDirty();
@@ -947,7 +1000,8 @@
         decoder: 'auto',
         userAgent: UA_VLC,
         bufferProfile: 'balanced',
-        aspectMode: 'fit'
+        aspectMode: 'fit',
+        insecureTls: false
       }).then(function () {
         toast('已恢复默认设置');
         return loadConfig();
@@ -1015,7 +1069,8 @@
         decoder: state.settings.decoder,
         userAgent: $('ua').value.trim(),
         bufferProfile: state.settings.buffer,
-        aspectMode: state.settings.aspect
+        aspectMode: state.settings.aspect,
+        insecureTls: $('insecureTls').checked
       },
       sources: state.sources.map(function (s) {
         return { name: s.name || '', url: s.url, type: s.type || 'AUTO' };
@@ -1068,7 +1123,8 @@
       decoder: settings.decoder || 'auto',
       userAgent: settings.userAgent || '',
       bufferProfile: settings.bufferProfile || 'balanced',
-      aspectMode: settings.aspectMode || 'fit'
+      aspectMode: settings.aspectMode || 'fit',
+      insecureTls: !!settings.insecureTls
     };
     if (!body.sources.length) {
       toast('文件中没有有效地址', true);
@@ -1112,6 +1168,7 @@
 
     $('ua').addEventListener('input', markDirty);
     $('epg').addEventListener('input', markDirty);
+    $('insecureTls').addEventListener('change', markDirty);
     $('saveBtn').addEventListener('click', saveSettings);
 
     document.querySelector('.chips').addEventListener('click', function (event) {

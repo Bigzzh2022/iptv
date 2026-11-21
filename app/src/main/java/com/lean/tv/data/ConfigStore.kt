@@ -16,6 +16,7 @@ object ConfigStore {
     private const val KEY_UA = "user_agent"
     private const val KEY_BUFFER = "buffer_profile"
     private const val KEY_ASPECT = "aspect_mode"
+    private const val KEY_INSECURE_TLS = "insecure_tls"
 
     private val kv: MMKV by lazy { MMKV.defaultMMKV() }
 
@@ -67,6 +68,17 @@ object ConfigStore {
             .takeIf { AspectMode.isValid(it) } ?: AspectMode.FIT
         set(value) {
             kv.encode(KEY_ASPECT, value)
+        }
+
+    /**
+     * 兼容旧电视的 TLS 开关：忽略 HTTPS 证书错误。
+     * Android 5.x 缺少部分新根证书，访问 Let's Encrypt 等源时会握手失败，
+     * 默认关闭，仅在确认源可信时手动开启。
+     */
+    var insecureTls: Boolean
+        get() = kv.decodeBool(KEY_INSECURE_TLS, false)
+        set(value) {
+            kv.encode(KEY_INSECURE_TLS, value)
         }
 }
 

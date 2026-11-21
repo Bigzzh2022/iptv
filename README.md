@@ -46,9 +46,9 @@
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/` | 返回配置页（`assets/index.html`） |
-| GET | `/api/config` | 获取订阅源列表、EPG、解码方式、UA、缓冲档位、画面比例 |
+| GET | `/api/config` | 获取订阅源（含频道数/最近错误）、EPG、解码方式、UA、缓冲档位、画面比例、TLS 兼容开关 |
 | POST | `/api/config` | 更新设置或整体同步订阅源列表 |
-| POST | `/api/source/refresh` | 异步刷新指定订阅源，body：`{"id": 1}` |
+| POST | `/api/source/refresh` | 同步刷新指定订阅源，body：`{"id": 1}`，返回 `count` 或 `error` |
 | POST | `/api/source/refresh-all` | 依次刷新全部订阅源 |
 | GET | `/api/channels` | 频道预览，参数 `q`（名称/分组搜索）、`limit`（默认 200，最大 500） |
 | GET | `/api/status` | 电视 IP、版本、内存占用、频道数/源数量、正在刷新数 |

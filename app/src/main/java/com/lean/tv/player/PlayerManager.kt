@@ -117,7 +117,9 @@ object PlayerManager {
 
         val dataSourceFactory = DefaultDataSource.Factory(
             context,
-            OkHttpDataSource.Factory(Http.client)
+            OkHttpDataSource.Factory(
+                if (ConfigStore.insecureTls) Http.insecureClient else Http.client
+            )
                 .setUserAgent(ConfigStore.userAgent)
         )
 

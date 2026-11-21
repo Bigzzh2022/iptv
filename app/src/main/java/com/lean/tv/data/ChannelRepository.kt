@@ -62,6 +62,10 @@ class ChannelRepository(private val db: AppDatabase) {
         db.channelDao().count()
     }
 
+    suspend fun channelCount(sourceId: Long): Int = withContext(Dispatchers.IO) {
+        db.channelDao().countBySource(sourceId)
+    }
+
     suspend fun sourceCount(): Int = withContext(Dispatchers.IO) {
         db.sourceDao().count()
     }
@@ -105,6 +109,9 @@ class ChannelRepository(private val db: AppDatabase) {
                             existing.copy(name = input.name, url = input.url, type = input.type)
                         )
                         refreshIds.add(existing.id)
+                    } else if (existing.lastUpdate == 0L) {
+                        // 曾经保存但从未成功解析过，保存配置时顺带重试
+                        refreshIds.add(existing.id)
                     }
                 } else {
                     refreshIds.add(
@@ -119,15 +126,32 @@ class ChannelRepository(private val db: AppDatabase) {
     }
 
     /**
+     * 最近一次刷新结果，供配置页展示具体失败原因。
+     */
+    data class RefreshState(val at: Long, val count: Int, val error: String?)
+
+    private val lastStates = java.util.concurrent.ConcurrentHashMap<Long, RefreshState>()
+
+    fun refreshState(sourceId: Long): RefreshState? = lastStates[sourceId]
+
+    /**
      * 拉取并解析订阅源，整体替换该源的频道。
-     * @return 解析到的频道数；-1 表示下载失败，0 表示内容为空。
+     * @return 解析到的频道数；-1 表示下载/解析失败，0 表示内容为空。
      */
     suspend fun refreshSource(source: SourceEntity): Int = withContext(Dispatchers.IO) {
         refreshingCount.incrementAndGet()
         try {
-            // 下载 + 解析放在独立函数里，返回后大文本即可被回收，避免和实体列表同时占用内存
-            val parsed = downloadAndParse(source) ?: return@withContext -1
+            val outcome = downloadAndParse(source)
+            val parsed = outcome.channels
+            if (parsed == null) {
+                val reason = outcome.error ?: "下载失败"
+                lastStates[source.id] = RefreshState(System.currentTimeMillis(), -1, reason)
+                Log.w(TAG, "刷新失败 ${source.url}: $reason")
+                return@withContext -1
+            }
             if (parsed.isEmpty()) {
+                lastStates[source.id] =
+                    RefreshState(System.currentTimeMillis(), 0, "未解析到频道，请检查订阅格式")
                 Log.w(TAG, "未解析到频道: ${source.url}")
                 return@withContext 0
             }
@@ -148,37 +172,52 @@ class ChannelRepository(private val db: AppDatabase) {
                 db.channelDao().insertAll(entities)
                 db.sourceDao().markUpdated(source.id, now)
             }
+            lastStates[source.id] = RefreshState(now, entities.size, null)
             entities.size.also {
                 Log.i(TAG, "订阅源 ${source.name} 刷新完成: $it 个频道")
             }
+        } catch (e: Exception) {
+            lastStates[source.id] = RefreshState(
+                System.currentTimeMillis(),
+                -1,
+                "刷新异常：${e.javaClass.simpleName}"
+            )
+            Log.w(TAG, "刷新异常: ${source.url}", e)
+            -1
         } finally {
             refreshingCount.decrementAndGet()
         }
     }
 
-    /**
-     * 下载并逐行解析；下载失败返回 null，内容为空返回空列表。
-     * 全程流式读取，不把整个订阅源解码成字符串，显著降低大源的内存峰值。
-     */
-    private fun downloadAndParse(source: SourceEntity): List<ParsedChannel>? {
-        val request = Request.Builder()
-            .url(source.url)
-            .header("User-Agent", ConfigStore.userAgent)
-            .build()
+    private class ParseOutcome(val channels: List<ParsedChannel>?, val error: String?) {
+        companion object {
+            fun success(channels: List<ParsedChannel>) = ParseOutcome(channels, null)
+            fun failure(reason: String) = ParseOutcome(null, reason)
+        }
+    }
 
+    /**
+     * 下载并逐行解析。全程流式读取，不把整个订阅源解码成字符串。
+     */
+    private fun downloadAndParse(source: SourceEntity): ParseOutcome {
         return try {
-            Http.client.newCall(request).execute().use { response ->
+            val request = Request.Builder()
+                .url(source.url)
+                .header("User-Agent", ConfigStore.userAgent)
+                .build()
+
+            Http.clientFor(source.url).newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     Log.w(TAG, "订阅源 HTTP ${response.code}: ${source.url}")
-                    return null
+                    return ParseOutcome.failure("HTTP ${response.code}")
                 }
-                val body = response.body ?: return null
+                val body = response.body ?: return ParseOutcome.failure("响应为空")
                 if (body.contentLength() > MAX_SOURCE_BYTES) {
                     Log.w(TAG, "订阅源超过 32 MB: ${source.url}")
-                    return null
+                    return ParseOutcome.failure("订阅源超过 32 MB")
                 }
 
-                body.byteStream().use { raw ->
+                val channels = body.byteStream().use { raw ->
                     val bounded = BoundedInputStream(raw, MAX_SOURCE_BYTES)
                     val buffered = BufferedInputStream(bounded, SNIFF_BYTES)
                     val sniff = sniff(buffered, source)
@@ -189,11 +228,23 @@ class ChannelRepository(private val db: AppDatabase) {
                         sniff.parser.parse(reader)
                     }
                 }
+                ParseOutcome.success(channels)
             }
         } catch (e: Exception) {
             Log.w(TAG, "下载订阅源失败: ${source.url}", e)
-            null
+            ParseOutcome.failure(describeError(e))
         }
+    }
+
+    private fun describeError(e: Exception): String = when (e) {
+        is javax.net.ssl.SSLException -> "TLS 握手失败（可开启兼容旧电视 TLS）"
+        is java.net.UnknownHostException -> "域名解析失败"
+        is java.net.SocketTimeoutException -> "连接超时"
+        is IllegalArgumentException -> "订阅地址格式不正确"
+        else -> e.message
+            ?.take(80)
+            ?.let { "${e.javaClass.simpleName}: $it" }
+            ?: e.javaClass.simpleName
     }
 
     private class SniffResult(val charset: Charset, val parser: PlaylistParser)
