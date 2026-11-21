@@ -37,6 +37,7 @@ class ApiRouter(private val context: Context) {
             method == Method.GET && (uri == "/" || uri == "/index.html") -> serveIndex()
             method == Method.GET && uri == "/api/config" -> getConfig()
             method == Method.GET && uri == "/api/status" -> getStatus()
+            method == Method.GET && uri == "/api/channels" -> getChannels(session)
             method == Method.POST && uri == "/api/config" -> postConfig(session)
             method == Method.POST && uri == "/api/source/refresh" -> postRefresh(session)
             method == Method.POST && uri == "/api/source/refresh-all" -> postRefreshAll()
@@ -44,12 +45,16 @@ class ApiRouter(private val context: Context) {
         }
     }
 
+    /** 配置页只加载一次，之后复用缓存，避免每次请求都读 assets。 */
+    private val indexHtml: String by lazy {
+        context.assets.open("index.html")
+            .bufferedReader(Charsets.UTF_8)
+            .use { it.readText() }
+    }
+
     private fun serveIndex(): HttpResult {
         return try {
-            val html = context.assets.open("index.html")
-                .bufferedReader(Charsets.UTF_8)
-                .use { it.readText() }
-            HttpResult(Response.Status.OK, MIME_HTML, html)
+            HttpResult(Response.Status.OK, MIME_HTML, indexHtml)
         } catch (e: Exception) {
             error(Response.Status.NOT_FOUND, "index.html 未找到")
         }
@@ -101,7 +106,35 @@ class ApiRouter(private val context: Context) {
             put("totalMb", memoryInfo.totalMem / MB)
             put("channelCount", counts.first)
             put("sourceCount", counts.second)
+            put("refreshing", App.repository.refreshing)
             put("version", BuildConfig.VERSION_NAME)
+        }
+        return ok(data)
+    }
+
+    /** 配置页频道预览：支持 q 搜索，最多返回 limit 条（默认 200）。 */
+    private fun getChannels(session: IHTTPSession): HttpResult {
+        val query = session.parameters["q"]?.firstOrNull().orEmpty().trim()
+        val limit = session.parameters["limit"]?.firstOrNull()?.toIntOrNull()
+            ?: DEFAULT_PREVIEW_LIMIT
+
+        val snapshot = runBlocking {
+            App.repository.channelCount() to App.repository.previewChannels(query, limit)
+        }
+
+        val data = JSONObject().apply {
+            put("total", snapshot.first)
+            put("q", query)
+            put("limit", limit.coerceIn(1, MAX_PREVIEW_LIMIT))
+            put("items", JSONArray().apply {
+                snapshot.second.forEach { channel ->
+                    put(JSONObject().apply {
+                        put("name", channel.name)
+                        put("group", channel.group)
+                        put("url", channel.streamUrl)
+                    })
+                }
+            })
         }
         return ok(data)
     }
@@ -238,5 +271,7 @@ class ApiRouter(private val context: Context) {
         const val TYPE_AUTO = "AUTO"
         const val TYPE_M3U = "M3U"
         const val TYPE_TXT = "TXT"
+        const val DEFAULT_PREVIEW_LIMIT = 200
+        const val MAX_PREVIEW_LIMIT = 500
     }
 }

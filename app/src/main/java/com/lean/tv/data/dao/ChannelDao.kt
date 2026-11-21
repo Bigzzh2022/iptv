@@ -37,6 +37,15 @@ interface ChannelDao {
     @Query("SELECT COUNT(*) FROM channels WHERE sourceId = :sourceId")
     suspend fun countBySource(sourceId: Long): Int
 
+    /**
+     * 配置页频道预览：按名称或分组过滤，只取前 limit 条，避免大列表撑爆手机页面。
+     */
+    @Query(
+        "SELECT * FROM channels WHERE :q = '' OR name LIKE '%' || :q || '%' " +
+            "OR `group` LIKE '%' || :q || '%' ORDER BY id ASC LIMIT :limit"
+    )
+    suspend fun preview(q: String, limit: Int): List<ChannelEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(items: List<ChannelEntity>)
 

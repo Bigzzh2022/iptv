@@ -1,5 +1,6 @@
 package com.lean.tv.util
 
+import android.os.SystemClock
 import okhttp3.Dns
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
@@ -9,22 +10,28 @@ import java.util.concurrent.TimeUnit
 /**
  * 全局唯一的 OkHttp 客户端：
  * - 长连接复用，减少直播换台时的 TCP 握手
- * - 自带 DNS 缓存，避免同一域名反复解析
+ * - 自带带过期时间的 DNS 缓存，避免同一域名反复解析，也防止源站换 IP 后一直连旧地址
  */
 object Http {
 
+    private const val DNS_TTL_MS = 10 * 60 * 1000L
+
+    private class DnsEntry(val addresses: List<InetAddress>, val expiresAt: Long)
+
     private val dnsCache = object : Dns {
 
-        private val cache = HashMap<String, List<InetAddress>>()
+        private val cache = HashMap<String, DnsEntry>()
 
         override fun lookup(hostname: String): List<InetAddress> {
+            val now = SystemClock.elapsedRealtime()
             synchronized(cache) {
-                cache[hostname]?.let { return it }
+                val entry = cache[hostname]
+                if (entry != null && entry.expiresAt > now) return entry.addresses
             }
             val addresses = Dns.SYSTEM.lookup(hostname)
             synchronized(cache) {
                 if (cache.size >= 64) cache.clear()
-                cache[hostname] = addresses
+                cache[hostname] = DnsEntry(addresses, now + DNS_TTL_MS)
             }
             return addresses
         }

@@ -252,6 +252,24 @@
   .spin { display: inline-block; width: 15px; height: 15px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin .7s linear infinite; vertical-align: -2px; }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { * { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+  /* 频道预览 */
+  .refresh-state { display: flex; align-items: center; gap: 8px; margin: -2px 2px 12px; color: var(--accent); font-size: 12px; }
+  .refresh-state[hidden] { display: none; }
+  .search { position: relative; display: block; margin-bottom: 10px; }
+  .search svg { position: absolute; left: 12px; top: 50%; width: 18px; height: 18px; margin-top: -9px; fill: var(--faint); pointer-events: none; }
+  .search input { padding-left: 38px; }
+  .search input::-webkit-search-cancel-button { filter: invert(.6); }
+  .channel-wrap { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .channel-wrap[hidden] { display: none; }
+  .channel-list { list-style: none; margin: 0; padding: 0; }
+  .channel { display: flex; align-items: center; gap: 10px; padding: 11px 13px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .channel:last-child { border-bottom: 0; }
+  .channel:active { background: var(--surface-2); }
+  .ch-main { flex: 1; min-width: 0; }
+  .ch-name { font-size: 14px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ch-sub { margin-top: 2px; color: var(--faint); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ch-group { flex: 0 0 auto; max-width: 90px; padding: 2px 7px; border-radius: 6px; background: rgba(255, 255, 255, .06); color: var(--muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -292,6 +310,7 @@
 
   <nav class="tabs" role="tablist" aria-label="配置分类">
     <button class="tab on" type="button" role="tab" data-tab="sources">订阅源</button>
+    <button class="tab" type="button" role="tab" data-tab="channels">频道</button>
     <button class="tab" type="button" role="tab" data-tab="playback">播放</button>
     <button class="tab" type="button" role="tab" data-tab="system">系统</button>
   </nav>
@@ -311,6 +330,9 @@
           </button>
         </div>
       </div>
+      <p class="refresh-state" id="refreshState" hidden>
+        <span class="spin"></span><span id="refreshText">正在刷新订阅源…</span>
+      </p>
       <ul class="source-list" id="sources"></ul>
       <div class="empty" id="srcEmpty" hidden>
         <svg viewBox="0 0 24 24"><path d="M21 3H3a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5v2h8v-2h5a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 14H3V5h18v12z"/></svg>
@@ -318,6 +340,21 @@
         <button class="btn primary sm" id="emptyAddBtn" type="button">添加订阅源</button>
       </div>
       <p class="hint">支持 M3U / M3U8 / TXT，TXT 支持 <code>#genre#</code> 分组与 <code>#</code> 多线路。保存后电视端会自动解析并刷新频道列表。</p>
+    </section>
+
+    <section class="panel" data-panel="channels" role="tabpanel">
+      <label class="search">
+        <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
+        <input id="chSearch" type="search" placeholder="搜索频道名称或分组" autocomplete="off" />
+      </label>
+      <p class="hint" id="chMeta">正在加载…</p>
+      <div class="channel-wrap" id="chWrap" hidden>
+        <ul class="channel-list" id="chList"></ul>
+      </div>
+      <div class="empty" id="chEmpty" hidden>
+        <p>没有匹配的频道，先添加订阅源或换个关键词</p>
+      </div>
+      <p class="hint">最多显示前 200 个频道；点击条目可复制拉流地址，方便在其它设备上排查。</p>
     </section>
 
     <section class="panel" data-panel="playback" role="tabpanel">
@@ -407,6 +444,12 @@
         <button class="btn ghost block" id="refreshAllBtn2" type="button">刷新全部订阅源</button>
       </div>
 
+      <div class="card">
+        <h2>重置</h2>
+        <p class="hint">恢复默认播放参数（自适应画面、均衡缓冲、自动解码），不会删除订阅源。</p>
+        <button class="btn ghost block" id="resetBtn" type="button">恢复默认设置</button>
+      </div>
+
       <p class="footer" id="footerVer">LeanTV · 局域网配置页</p>
     </section>
   </main>
@@ -484,7 +527,8 @@
     status: null,
     editing: null,
     confirmAction: null,
-    toastTimer: null
+    toastTimer: null,
+    channelSeq: 0
   };
 
   function $(id) { return document.getElementById(id); }
@@ -801,6 +845,63 @@
     }).catch(function () {});
   }
 
+  /* ---------- 频道预览 ---------- */
+
+  function loadChannels() {
+    var query = $('chSearch').value.trim();
+    var seq = ++state.channelSeq;
+    return api('/api/channels?limit=200&q=' + encodeURIComponent(query)).then(function (data) {
+      if (seq !== state.channelSeq) return;
+      renderChannels(data);
+    }).catch(function (err) {
+      $('chMeta').textContent = err.message;
+    });
+  }
+
+  function renderChannels(data) {
+    var items = data.items || [];
+    var list = $('chList');
+    list.textContent = '';
+    $('chMeta').textContent = data.q
+      ? '“' + data.q + '” 匹配 ' + items.length + ' 个，共 ' + data.total + ' 个频道'
+      : '共 ' + data.total + ' 个频道，显示前 ' + items.length + ' 个';
+    $('chWrap').hidden = items.length === 0;
+    $('chEmpty').hidden = items.length > 0;
+
+    items.forEach(function (channel) {
+      var row = document.createElement('li');
+      row.className = 'channel';
+
+      var main = document.createElement('div');
+      main.className = 'ch-main';
+      var name = document.createElement('div');
+      name.className = 'ch-name';
+      name.textContent = channel.name || '未命名频道';
+      var sub = document.createElement('div');
+      sub.className = 'ch-sub';
+      sub.textContent = channel.url || '';
+      main.appendChild(name);
+      main.appendChild(sub);
+      row.appendChild(main);
+
+      if (channel.group && channel.group !== '未分组') {
+        var group = document.createElement('span');
+        group.className = 'ch-group';
+        group.textContent = channel.group;
+        row.appendChild(group);
+      }
+
+      row.addEventListener('click', function () {
+        copyText(channel.url).then(function () {
+          toast('已复制拉流地址');
+        }).catch(function () {
+          toast('复制失败', true);
+        });
+      });
+      list.appendChild(row);
+    });
+  }
+
   /* ---------- 设置 ---------- */
 
   function loadConfig() {
@@ -840,10 +941,27 @@
     });
   }
 
+  function resetSettings() {
+    askConfirm('恢复默认播放参数？订阅源和 EPG 地址会保留。', function () {
+      postJSON('/api/config', {
+        decoder: 'auto',
+        userAgent: UA_VLC,
+        bufferProfile: 'balanced',
+        aspectMode: 'fit'
+      }).then(function () {
+        toast('已恢复默认设置');
+        return loadConfig();
+      }).catch(function (err) {
+        toast(err.message, true);
+      });
+    });
+  }
+
   /* ---------- 状态 ---------- */
 
   function loadStatus() {
     return api('/api/status').then(function (s) {
+      var wasRefreshing = !!(state.status && state.status.refreshing > 0);
       state.status = s;
       setOnline(true);
       var address = 'http://' + s.ip + ':' + s.port;
@@ -867,6 +985,19 @@
       $('sysCounts').textContent = s.channelCount + ' / ' + s.sourceCount;
       $('sysMem').textContent = '可用 ' + fmtMb(avail) + '，应用占用 ' + s.usedMb + ' MB';
       $('footerVer').textContent = 'LeanTV v' + s.version + ' · 局域网配置页';
+
+      var refreshing = s.refreshing || 0;
+      $('refreshState').hidden = refreshing <= 0;
+      $('refreshText').textContent = refreshing > 1
+        ? '正在刷新 ' + refreshing + ' 个订阅源…'
+        : '正在刷新订阅源…';
+
+      // 刷新结束后回读一次，让「更新时间」和频道预览立即反映结果
+      if (wasRefreshing && refreshing === 0) {
+        refreshSources();
+        var channelPanel = document.querySelector('.panel[data-panel="channels"]');
+        if (channelPanel && channelPanel.classList.contains('on')) loadChannels();
+      }
     }).catch(function () {
       setOnline(false);
     });
@@ -964,6 +1095,7 @@
     for (var j = 0; j < panels.length; j++) {
       panels[j].className = panels[j].getAttribute('data-panel') === name ? 'panel on' : 'panel';
     }
+    if (name === 'channels') loadChannels();
   }
 
   function bindUI() {
@@ -1004,6 +1136,13 @@
     $('srcForm').addEventListener('submit', submitSource);
     $('refreshAllBtn').addEventListener('click', function () { refreshAll(this); });
     $('refreshAllBtn2').addEventListener('click', function () { refreshAll(this); });
+    $('resetBtn').addEventListener('click', resetSettings);
+
+    var searchTimer = null;
+    $('chSearch').addEventListener('input', function () {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(loadChannels, 300);
+    });
 
     $('exportBtn').addEventListener('click', exportConfig);
     $('importBtn').addEventListener('click', function () { $('importFile').click(); });

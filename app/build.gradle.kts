@@ -22,8 +22,8 @@ android {
         applicationId = "com.lean.tv"
         minSdk = 22
         targetSdk = 22
-        versionCode = 4
-        versionName = "1.0.3"
+        versionCode = 5
+        versionName = "1.1.0"
     }
 
     buildFeatures {
@@ -107,6 +107,9 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.10.0")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
     implementation("com.tencent:mmkv:1.2.16")
+
+    // 纯 Java 二维码编码器，用于电视端展示配置页地址
+    implementation("com.google.zxing:core:3.5.3")
 
     implementation("androidx.room:room-runtime:2.5.2")
     implementation("androidx.room:room-ktx:2.5.2")

@@ -4,6 +4,7 @@ import androidx.room.withTransaction
 import com.lean.tv.data.entity.ChannelEntity
 import com.lean.tv.data.entity.SourceEntity
 import com.lean.tv.parser.M3uParser
+import com.lean.tv.parser.ParsedChannel
 import com.lean.tv.parser.PlaylistParser
 import com.lean.tv.parser.TxtParser
 import com.lean.tv.util.Http
@@ -15,6 +16,7 @@ import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.Charset
 import java.nio.charset.CodingErrorAction
+import java.util.concurrent.atomic.AtomicInteger
 import android.util.Log
 
 data class SourceInput(
@@ -25,6 +27,12 @@ data class SourceInput(
 )
 
 class ChannelRepository(private val db: AppDatabase) {
+
+    private val refreshingCount = AtomicInteger(0)
+
+    /** 正在刷新的订阅源数量，供配置页展示进度。 */
+    val refreshing: Int
+        get() = refreshingCount.get()
 
     suspend fun sources(): List<SourceEntity> = withContext(Dispatchers.IO) {
         db.sourceDao().all()
@@ -54,6 +62,12 @@ class ChannelRepository(private val db: AppDatabase) {
     suspend fun alternativeUrls(name: String, url: String): List<String> =
         withContext(Dispatchers.IO) {
             db.channelDao().alternativeUrls(name, url)
+        }
+
+    /** 配置页预览：只返回前 limit 条，避免把整库频道序列化到手机。 */
+    suspend fun previewChannels(query: String, limit: Int): List<ChannelEntity> =
+        withContext(Dispatchers.IO) {
+            db.channelDao().preview(query.trim(), limit.coerceIn(1, 500))
         }
 
     /**
@@ -102,44 +116,54 @@ class ChannelRepository(private val db: AppDatabase) {
      * @return 解析到的频道数；-1 表示下载失败，0 表示内容为空。
      */
     suspend fun refreshSource(source: SourceEntity): Int = withContext(Dispatchers.IO) {
+        refreshingCount.incrementAndGet()
+        try {
+            // 下载 + 解析放在独立函数里，返回后大文本即可被回收，避免和实体列表同时占用内存
+            val parsed = downloadAndParse(source) ?: return@withContext -1
+            if (parsed.isEmpty()) {
+                Log.w(TAG, "未解析到频道: ${source.url}")
+                return@withContext 0
+            }
+
+            val entities = parsed.map {
+                ChannelEntity(
+                    name = it.name,
+                    group = it.group,
+                    logoUrl = it.logoUrl,
+                    streamUrl = it.url,
+                    sourceId = source.id
+                )
+            }
+            val now = System.currentTimeMillis()
+
+            db.withTransaction {
+                db.channelDao().deleteBySource(source.id)
+                db.channelDao().insertAll(entities)
+                db.sourceDao().markUpdated(source.id, now)
+            }
+            entities.size.also {
+                Log.i(TAG, "订阅源 ${source.name} 刷新完成: $it 个频道")
+            }
+        } finally {
+            refreshingCount.decrementAndGet()
+        }
+    }
+
+    /** 下载并解析；下载失败返回 null，内容为空返回空列表。 */
+    private fun downloadAndParse(source: SourceEntity): List<ParsedChannel>? {
         val text = try {
             fetchText(source.url)
         } catch (e: Exception) {
             Log.w(TAG, "下载订阅源失败: ${source.url}", e)
             null
-        } ?: return@withContext -1
+        } ?: return null
 
         val parser: PlaylistParser = when {
             text.contains("#EXTM3U", ignoreCase = true) -> M3uParser
             source.type.equals("M3U", ignoreCase = true) -> M3uParser
             else -> TxtParser
         }
-
-        val parsed = parser.parse(text)
-        if (parsed.isEmpty()) {
-            Log.w(TAG, "未解析到频道: ${source.url}")
-            return@withContext 0
-        }
-
-        val entities = parsed.map {
-            ChannelEntity(
-                name = it.name,
-                group = it.group,
-                logoUrl = it.logoUrl,
-                streamUrl = it.url,
-                sourceId = source.id
-            )
-        }
-        val now = System.currentTimeMillis()
-
-        db.withTransaction {
-            db.channelDao().deleteBySource(source.id)
-            db.channelDao().insertAll(entities)
-            db.sourceDao().markUpdated(source.id, now)
-        }
-        entities.size.also {
-            Log.i(TAG, "订阅源 ${source.name} 刷新完成: $it 个频道")
-        }
+        return parser.parse(text)
     }
 
     private fun fetchText(url: String): String? {
