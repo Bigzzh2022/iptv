@@ -14,6 +14,8 @@ object ConfigStore {
     private const val KEY_DECODER = "decoder_mode"
     private const val KEY_PORT = "http_port"
     private const val KEY_UA = "user_agent"
+    private const val KEY_BUFFER = "buffer_profile"
+    private const val KEY_ASPECT = "aspect_mode"
 
     private val kv: MMKV by lazy { MMKV.defaultMMKV() }
 
@@ -50,6 +52,40 @@ object ConfigStore {
         set(value) {
             kv.encode(KEY_PORT, value)
         }
+
+    /** 缓冲档位：流畅 / 均衡 / 稳定。 */
+    var bufferProfile: String
+        get() = kv.decodeString(KEY_BUFFER, BufferProfile.BALANCED).orEmpty()
+            .takeIf { BufferProfile.isValid(it) } ?: BufferProfile.BALANCED
+        set(value) {
+            kv.encode(KEY_BUFFER, value)
+        }
+
+    /** 画面比例：自适应 / 拉伸 / 裁剪。 */
+    var aspectMode: String
+        get() = kv.decodeString(KEY_ASPECT, AspectMode.FIT).orEmpty()
+            .takeIf { AspectMode.isValid(it) } ?: AspectMode.FIT
+        set(value) {
+            kv.encode(KEY_ASPECT, value)
+        }
+}
+
+object BufferProfile {
+    const val FAST = "fast"
+    const val BALANCED = "balanced"
+    const val STABLE = "stable"
+
+    fun isValid(value: String): Boolean =
+        value == FAST || value == BALANCED || value == STABLE
+}
+
+object AspectMode {
+    const val FIT = "fit"
+    const val FILL = "fill"
+    const val ZOOM = "zoom"
+
+    fun isValid(value: String): Boolean =
+        value == FIT || value == FILL || value == ZOOM
 }
 
 object DecoderMode {

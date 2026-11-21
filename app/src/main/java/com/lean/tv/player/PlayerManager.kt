@@ -18,6 +18,7 @@ import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.lean.tv.App
+import com.lean.tv.data.BufferProfile
 import com.lean.tv.data.ConfigStore
 import com.lean.tv.data.DecoderMode
 import com.lean.tv.util.Http
@@ -33,10 +34,6 @@ import kotlinx.coroutines.launch
 object PlayerManager {
 
     private const val TAG = "PlayerManager"
-    private const val MIN_BUFFER_MS = 15_000
-    private const val MAX_BUFFER_MS = 50_000
-    private const val BUFFER_FOR_PLAYBACK_MS = 1_500
-    private const val BUFFER_FOR_REBUFFER_MS = 3_000
     private const val LOW_MEMORY_MB = 200L
     private const val MAX_SOFTWARE_RETRY = 1
 
@@ -124,13 +121,9 @@ object PlayerManager {
                 .setUserAgent(ConfigStore.userAgent)
         )
 
+        val durations = bufferDurations(ConfigStore.bufferProfile)
         val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(
-                MIN_BUFFER_MS,
-                MAX_BUFFER_MS,
-                BUFFER_FOR_PLAYBACK_MS,
-                BUFFER_FOR_REBUFFER_MS
-            )
+            .setBufferDurationsMs(durations[0], durations[1], durations[2], durations[3])
             .build()
 
         return ExoPlayer.Builder(context, renderersFactory)
@@ -202,6 +195,15 @@ object PlayerManager {
         override fun onPlayerError(error: PlaybackException) {
             mainHandler.post { handlePlaybackError(error) }
         }
+    }
+
+    /**
+     * 缓冲档位 -> [最小缓冲, 最大缓冲, 起播缓冲, 卡顿恢复缓冲]（毫秒）
+     */
+    private fun bufferDurations(profile: String): IntArray = when (profile) {
+        BufferProfile.FAST -> intArrayOf(8_000, 25_000, 1_000, 2_000)
+        BufferProfile.STABLE -> intArrayOf(25_000, 80_000, 2_000, 5_000)
+        else -> intArrayOf(15_000, 50_000, 1_500, 3_000)
     }
 
     private fun isLowMemory(context: Context): Boolean {

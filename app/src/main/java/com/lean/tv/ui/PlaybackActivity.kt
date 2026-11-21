@@ -7,9 +7,11 @@ import android.view.View
 import android.widget.TextView
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.lean.tv.App
 import com.lean.tv.R
+import com.lean.tv.data.AspectMode
 import com.lean.tv.data.ConfigStore
 import com.lean.tv.data.entity.ChannelEntity
 import com.lean.tv.player.PlayerManager
@@ -44,6 +46,11 @@ class PlaybackActivity : FragmentActivity() {
             hintView.visibility = View.VISIBLE
         }
         playerView.player = PlayerManager.player()
+        playerView.resizeMode = when (ConfigStore.aspectMode) {
+            AspectMode.FILL -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+            AspectMode.ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+        }
         playerView.controllerShowTimeoutMs = 3000
 
         lifecycleScope.launch {

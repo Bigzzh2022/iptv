@@ -1,6 +1,6 @@
 # LeanTV
 
-运行在 Android 5.1.1（API 22）老电视上的轻量级 IPTV 应用。电视端只有频道列表和播放器，所有配置（直播源、EPG、解码方式）都通过手机/电脑浏览器在局域网内完成。
+运行在 Android 5.1.1（API 22）老电视上的轻量级 IPTV 应用。电视端只有频道列表和播放器，所有配置（直播源、EPG、解码方式、缓冲档位、画面比例、拉流 UA）都通过手机/电脑浏览器在局域网内完成。
 
 ## 特性
 
@@ -45,10 +45,11 @@
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/` | 返回配置页（`assets/index.html`） |
-| GET | `/api/config` | 获取订阅源列表、EPG、解码方式 |
+| GET | `/api/config` | 获取订阅源列表、EPG、解码方式、UA、缓冲档位、画面比例 |
 | POST | `/api/config` | 更新设置或整体同步订阅源列表 |
 | POST | `/api/source/refresh` | 异步刷新指定订阅源，body：`{"id": 1}` |
-| GET | `/api/status` | 电视 IP、内存占用、频道数/源数量 |
+| POST | `/api/source/refresh-all` | 依次刷新全部订阅源 |
+| GET | `/api/status` | 电视 IP、版本、内存占用、频道数/源数量 |
 
 ## 目录结构
 

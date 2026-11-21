@@ -3,385 +3,1048 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="theme-color" content="#0e0f12" />
-<title>LeanTV 配置</title>
+<meta name="theme-color" content="#090b0e" />
+<title>LeanTV · 配置</title>
 <style>
   :root {
-    --bg: #0e0f12;
-    --card: #171a1f;
-    --line: #262b33;
-    --text: #e8eaed;
-    --muted: #8b929c;
-    --accent: #3ea6ff;
+    color-scheme: dark;
+    --bg: #090b0e;
+    --bg-soft: #0e1217;
+    --surface: #12171d;
+    --surface-2: #171d24;
+    --line: rgba(255, 255, 255, .075);
+    --line-strong: rgba(255, 255, 255, .14);
+    --text: #e9eef4;
+    --muted: #8b96a4;
+    --faint: #6b7684;
+    --accent: #39d39a;
+    --accent-soft: rgba(57, 211, 154, .14);
+    --accent-ink: #04160f;
     --danger: #ff6b6b;
+    --danger-soft: rgba(255, 107, 107, .12);
+    --warn: #f3b544;
+    --radius: 16px;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; padding: 0; }
   body {
-    background: var(--bg);
+    min-height: 100vh;
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
-      "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
     font-size: 15px;
     line-height: 1.5;
-    padding: 16px 16px 40px;
+    background:
+      radial-gradient(900px 420px at 15% -8%, rgba(57, 211, 154, .10), transparent 60%),
+      radial-gradient(700px 360px at 100% 0%, rgba(62, 166, 255, .08), transparent 60%),
+      var(--bg);
   }
-  .wrap { max-width: 640px; margin: 0 auto; }
-  .head { display: flex; align-items: center; justify-content: space-between; margin: 6px 2px 18px; }
-  h1 { font-size: 24px; margin: 0; letter-spacing: .5px; }
-  h2 { font-size: 16px; margin: 0 0 12px; font-weight: 600; }
-  .muted { color: var(--muted); }
-  .hint { font-size: 12px; color: var(--muted); margin: -4px 0 12px; }
-  .small { font-size: 12px; }
-  .head p { margin: 4px 0 0; font-size: 12px; color: var(--muted); word-break: break-all; }
-  .dot { width: 10px; height: 10px; border-radius: 50%; background: #4a4f57; flex: 0 0 auto; }
-  .dot.online { background: #35d07f; box-shadow: 0 0 8px rgba(53, 208, 127, .8); }
+  body.modal-open { overflow: hidden; }
+  .wrap {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 18px 16px calc(34px + env(safe-area-inset-bottom));
+  }
+
+  /* 顶栏 */
+  .appbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+  .logo {
+    width: 40px; height: 40px; flex: 0 0 auto;
+    display: grid; place-items: center;
+    border-radius: 12px;
+    background: linear-gradient(145deg, #3fe3a8, #1f9d78);
+    box-shadow: 0 6px 18px rgba(57, 211, 154, .22);
+  }
+  .logo svg { width: 20px; height: 20px; fill: #04160f; }
+  h1 { font-size: 18px; margin: 0; letter-spacing: .3px; }
+  .sub { margin: 2px 0 0; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto;
+    padding: 7px 11px; border-radius: 999px;
+    background: var(--surface); border: 1px solid var(--line);
+    font-size: 12px; color: var(--muted);
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+  .chip.online { color: var(--accent); border-color: rgba(57, 211, 154, .3); background: rgba(57, 211, 154, .08); }
+  .chip.online .dot { background: var(--accent); box-shadow: 0 0 0 4px rgba(57, 211, 154, .15); }
+  .chip.offline { color: #ff9b9b; border-color: rgba(255, 107, 107, .3); background: rgba(255, 107, 107, .08); }
+  .chip.offline .dot { background: var(--danger); }
+
+  /* 状态卡 */
   .card {
-    background: var(--card);
+    background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 14px;
+    border-radius: var(--radius);
     padding: 16px;
     margin-bottom: 14px;
   }
-  .card-head { display: flex; align-items: baseline; justify-content: space-between; }
-  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .stat { background: #101318; border-radius: 10px; padding: 10px 12px; }
-  .stat .label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 2px; }
-  .stat b { font-size: 17px; font-weight: 600; }
-  .sources { list-style: none; margin: 0 0 14px; padding: 0; }
-  .sources .empty { color: var(--muted); font-size: 13px; padding: 10px 2px; }
+  .hero { background: linear-gradient(160deg, rgba(57, 211, 154, .10), transparent 58%), var(--surface); }
+  .label { margin: 0; font-size: 12px; color: var(--muted); }
+  .addr-row { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
+  .addr {
+    font-size: 21px; font-weight: 650; letter-spacing: .4px;
+    font-variant-numeric: tabular-nums; word-break: break-all;
+  }
+  .memory-head { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--muted); margin-top: 16px; }
+  .bar { height: 6px; border-radius: 999px; background: rgba(255, 255, 255, .07); overflow: hidden; margin: 8px 0 16px; }
+  .bar i { display: block; height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, var(--accent), #6fe7bd); transition: width .45s ease; }
+  .bar i.warn { background: linear-gradient(90deg, var(--warn), #ff8a65); }
+  .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .tile { background: rgba(255, 255, 255, .035); border: 1px solid var(--line); border-radius: 11px; padding: 9px 10px; min-width: 0; }
+  .tile span { display: block; font-size: 11px; color: var(--muted); margin-bottom: 1px; }
+  .tile b { display: block; font-size: 15px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* 标签页 */
+  .tabs {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; gap: 4px; padding: 5px;
+    margin: 14px 0 16px;
+    background: rgba(9, 11, 14, .86);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .tab {
+    flex: 1; min-height: 38px; border: 0; border-radius: 10px;
+    background: transparent; color: var(--muted);
+    font: inherit; font-size: 14px; cursor: pointer;
+  }
+  .tab.on { background: var(--surface-2); color: var(--text); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
+  .panel { display: none; }
+  .panel.on { display: block; animation: fade .18s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  .section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 2px 2px 12px; }
+  h2 { font-size: 16px; margin: 0; font-weight: 650; }
+  .count { color: var(--muted); font-size: 13px; font-weight: 400; margin-left: 4px; }
+  .head-actions { display: flex; gap: 8px; }
+
+  /* 订阅源列表 */
+  .source-list { list-style: none; margin: 0; padding: 0; }
   .source {
-    display: flex; align-items: center; gap: 10px;
-    padding: 12px; margin-bottom: 8px;
-    background: #101318; border-radius: 10px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 13px 14px;
+    margin-bottom: 9px;
   }
-  .source .info { min-width: 0; flex: 1; }
-  .source .name { font-weight: 600; margin-bottom: 2px; }
-  .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .actions { display: flex; gap: 8px; flex: 0 0 auto; }
-  button {
-    font: inherit; font-size: 13px; border-radius: 9px; border: 1px solid var(--line);
-    background: #1e232a; color: var(--text); padding: 8px 12px; cursor: pointer;
+  .src-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .src-name { flex: 0 1 auto; min-width: 0; font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .badge {
+    flex: 0 0 auto; padding: 1px 7px; border-radius: 6px;
+    background: rgba(255, 255, 255, .06); color: var(--muted);
+    font-size: 10px; letter-spacing: .4px;
   }
-  button:active { transform: scale(.97); }
-  button:disabled { opacity: .55; }
-  button.ghost { color: var(--accent); border-color: rgba(62, 166, 255, .4); background: transparent; }
-  button.danger { color: var(--danger); border-color: rgba(255, 107, 107, .4); background: transparent; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #05131f; font-weight: 600; }
-  button.block { width: 100%; padding: 12px; margin-top: 14px; }
+  .src-url { margin: 4px 0 9px; color: var(--faint); font-size: 12px; word-break: break-all; line-height: 1.45; }
+  .src-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .src-meta { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); min-width: 0; }
+  .src-meta .ok { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: 0 0 auto; }
+  .src-meta .none { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); flex: 0 0 auto; }
+  .src-actions { display: flex; gap: 2px; flex: 0 0 auto; }
+
+  .empty { text-align: center; padding: 26px 16px; border: 1px dashed var(--line-strong); border-radius: 14px; }
+  .empty svg { width: 34px; height: 34px; fill: var(--faint); margin-bottom: 8px; }
+  .empty p { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+
+  /* 表单 */
+  .field { display: block; margin-bottom: 14px; }
+  .field > span { display: block; font-size: 13px; color: var(--muted); margin-bottom: 7px; }
   input, select {
-    width: 100%; font: inherit; color: var(--text);
-    background: #101318; border: 1px solid var(--line);
-    border-radius: 10px; padding: 11px 12px; outline: none;
+    width: 100%; min-height: 46px; padding: 0 12px;
+    border-radius: 11px; border: 1px solid var(--line-strong);
+    background: var(--bg-soft); color: var(--text);
+    font: inherit; font-size: 16px;
   }
-  input:focus, select:focus { border-color: var(--accent); }
-  .form input { margin-bottom: 10px; }
-  .row { display: flex; gap: 10px; }
-  .row select { flex: 1; }
-  .row button { flex: 0 0 auto; }
-  .field { display: block; margin-bottom: 12px; }
-  .field span { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
-  footer { text-align: center; font-size: 12px; margin-top: 6px; }
+  select { min-height: 46px; }
+  input::placeholder { color: #5d6874; }
+  input:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; background: rgba(255, 255, 255, .06); padding: 1px 4px; border-radius: 4px; }
+  .hint { margin: 0 0 12px; font-size: 12px; color: var(--muted); line-height: 1.55; }
+  .hint:last-child { margin-bottom: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: -4px 0 10px; }
+  .chips button {
+    border: 1px dashed var(--line-strong); background: transparent; color: var(--muted);
+    border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 12px; cursor: pointer;
+  }
+  .chips button:active { background: var(--surface-2); }
+
+  /* 分段控件 */
+  .segmented { display: flex; gap: 4px; padding: 4px; background: var(--bg-soft); border: 1px solid var(--line); border-radius: 12px; }
+  .segmented button {
+    flex: 1; min-height: 38px; border: 0; border-radius: 9px;
+    background: transparent; color: var(--muted);
+    font: inherit; font-size: 14px; cursor: pointer;
+  }
+  .segmented button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; box-shadow: inset 0 0 0 1px rgba(57, 211, 154, .25); }
+
+  /* 按钮 */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    min-height: 42px; padding: 0 14px; border-radius: 11px;
+    border: 1px solid var(--line-strong); background: var(--surface-2); color: var(--text);
+    font: inherit; font-size: 14px; cursor: pointer; white-space: nowrap;
+  }
+  .btn svg { width: 17px; height: 17px; fill: currentColor; }
+  .btn:active { transform: scale(.985); }
+  .btn:disabled { opacity: .5; cursor: default; transform: none; }
+  .btn.sm { min-height: 36px; padding: 0 11px; font-size: 13px; border-radius: 10px; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 650; }
+  .btn.ghost { background: transparent; }
+  .btn.danger { color: var(--danger); border-color: rgba(255, 107, 107, .35); background: var(--danger-soft); }
+  .btn.block { width: 100%; margin-top: 4px; }
+  .btn-row { display: flex; gap: 10px; }
+  .btn-row .btn { flex: 1; }
+  .icon-btn {
+    width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center;
+    border: 0; border-radius: 10px; background: transparent; color: var(--muted); cursor: pointer;
+  }
+  .icon-btn svg { width: 18px; height: 18px; fill: currentColor; }
+  .icon-btn:active { background: var(--surface-2); }
+  .icon-btn.danger { color: var(--danger); }
+  .icon-btn:disabled { opacity: .45; }
+
+  .save-state { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--warn); margin-left: 6px; }
+  .save-state[hidden] { display: none; }
+  .save-state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); }
+
+  /* 键值列表 */
+  .kv { margin: 0; }
+  .kv > div { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .kv > div:last-child { border-bottom: 0; padding-bottom: 2px; }
+  .kv dt { color: var(--muted); font-size: 13px; flex: 0 0 auto; }
+  .kv dd { margin: 0; font-size: 13px; text-align: right; word-break: break-all; }
+
+  .footer { text-align: center; font-size: 12px; color: var(--faint); margin: 18px 0 0; }
+
+  /* 弹层 */
+  .modal { position: fixed; inset: 0; z-index: 60; display: grid; align-items: end; justify-items: center; padding: 16px; }
+  .modal[hidden] { display: none; }
+  .modal-mask { position: absolute; inset: 0; background: rgba(0, 0, 0, .62); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+  .modal-card {
+    position: relative; width: 100%; max-width: 520px; max-height: 88vh; overflow: auto;
+    background: var(--surface); border: 1px solid var(--line-strong);
+    border-radius: 20px; padding: 18px;
+    padding-bottom: calc(18px + env(safe-area-inset-bottom));
+    animation: sheet .22s cubic-bezier(.2, .9, .3, 1);
+  }
+  @keyframes sheet { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+  @media (min-width: 600px) { .modal { align-items: center; } }
+  .modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .modal-head h3 { margin: 0; font-size: 17px; }
+  .modal p { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
+
+  /* 提示 */
   .toast {
-    position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 16px);
-    background: #232a33; color: var(--text); border: 1px solid var(--line);
-    padding: 10px 16px; border-radius: 10px; font-size: 13px;
-    opacity: 0; pointer-events: none; transition: all .2s ease; max-width: 88vw;
-    text-align: center;
+    position: fixed; left: 50%; bottom: calc(26px + env(safe-area-inset-bottom));
+    transform: translate(-50%, 14px);
+    max-width: 88vw; padding: 10px 16px; border-radius: 11px;
+    background: #202731; border: 1px solid var(--line-strong);
+    color: var(--text); font-size: 13px; text-align: center;
+    opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s;
+    z-index: 80;
   }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
-  .toast.error { border-color: rgba(255, 107, 107, .6); }
+  .toast.error { border-color: rgba(255, 107, 107, .55); }
+
+  .spin { display: inline-block; width: 15px; height: 15px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin .7s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { * { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header class="head">
-    <div>
-      <h1>LeanTV</h1>
-      <p id="host">正在连接电视…</p>
+  <header class="appbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+      </span>
+      <div style="min-width:0">
+        <h1>LeanTV</h1>
+        <p class="sub" id="hostLine">正在连接电视…</p>
+      </div>
     </div>
-    <span class="dot" id="dot"></span>
+    <span class="chip" id="onlineChip"><i class="dot"></i><span id="onlineText">连接中</span></span>
   </header>
 
-  <section class="card">
-    <div class="stats">
-      <div class="stat"><span class="label">应用内存占用</span><b id="mem">—</b></div>
-      <div class="stat"><span class="label">设备剩余内存</span><b id="memAvail">—</b></div>
-      <div class="stat"><span class="label">频道数</span><b id="channels">—</b></div>
-      <div class="stat"><span class="label">订阅源</span><b id="sourceCount">—</b></div>
+  <section class="card hero">
+    <p class="label">配置地址</p>
+    <div class="addr-row">
+      <strong class="addr" id="addr">—</strong>
+      <button class="icon-btn" id="copyAddr" type="button" title="复制地址" aria-label="复制地址">
+        <svg viewBox="0 0 24 24"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>
+      </button>
+    </div>
+    <div class="memory-head">
+      <span>电视内存</span>
+      <span id="memText">—</span>
+    </div>
+    <div class="bar"><i id="memBar"></i></div>
+    <div class="tiles">
+      <div class="tile"><span>频道</span><b id="channels">—</b></div>
+      <div class="tile"><span>订阅源</span><b id="sourceCount">—</b></div>
+      <div class="tile"><span>应用占用</span><b id="mem">—</b></div>
+      <div class="tile"><span>版本</span><b id="version">—</b></div>
     </div>
   </section>
 
-  <section class="card">
-    <div class="card-head">
-      <h2>订阅源</h2>
-      <span class="muted small" id="sourceHint"></span>
+  <nav class="tabs" role="tablist" aria-label="配置分类">
+    <button class="tab on" type="button" role="tab" data-tab="sources">订阅源</button>
+    <button class="tab" type="button" role="tab" data-tab="playback">播放</button>
+    <button class="tab" type="button" role="tab" data-tab="system">系统</button>
+  </nav>
+
+  <main>
+    <section class="panel on" data-panel="sources" role="tabpanel">
+      <div class="section-head">
+        <h2>订阅源<span class="count" id="srcCount"></span></h2>
+        <div class="head-actions">
+          <button class="btn ghost sm" id="refreshAllBtn" type="button">
+            <svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+            刷新全部
+          </button>
+          <button class="btn primary sm" id="addSrcBtn" type="button">
+            <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+            添加
+          </button>
+        </div>
+      </div>
+      <ul class="source-list" id="sources"></ul>
+      <div class="empty" id="srcEmpty" hidden>
+        <svg viewBox="0 0 24 24"><path d="M21 3H3a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5v2h8v-2h5a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 14H3V5h18v12z"/></svg>
+        <p>还没有订阅源，添加一个 M3U 或 TXT 地址开始使用</p>
+        <button class="btn primary sm" id="emptyAddBtn" type="button">添加订阅源</button>
+      </div>
+      <p class="hint">支持 M3U / M3U8 / TXT，TXT 支持 <code>#genre#</code> 分组与 <code>#</code> 多线路。保存后电视端会自动解析并刷新频道列表。</p>
+    </section>
+
+    <section class="panel" data-panel="playback" role="tabpanel">
+      <div class="card">
+        <h2>解码方式</h2>
+        <p class="hint">老电视性能不足或出现花屏、黑屏时可尝试软解。</p>
+        <div class="segmented" id="decoderGroup" role="group" aria-label="解码方式">
+          <button type="button" data-value="auto" aria-pressed="false">自动</button>
+          <button type="button" data-value="hw" aria-pressed="false">硬解</button>
+          <button type="button" data-value="sw" aria-pressed="false">软解</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>缓冲策略</h2>
+        <div class="segmented" id="bufferGroup" role="group" aria-label="缓冲策略">
+          <button type="button" data-value="fast" aria-pressed="false">流畅</button>
+          <button type="button" data-value="balanced" aria-pressed="false">均衡</button>
+          <button type="button" data-value="stable" aria-pressed="false">稳定</button>
+        </div>
+        <p class="hint" id="bufferHint" style="margin-top:12px;margin-bottom:0">—</p>
+      </div>
+
+      <div class="card">
+        <h2>画面比例</h2>
+        <div class="segmented" id="aspectGroup" role="group" aria-label="画面比例">
+          <button type="button" data-value="fit" aria-pressed="false">自适应</button>
+          <button type="button" data-value="fill" aria-pressed="false">拉伸</button>
+          <button type="button" data-value="zoom" aria-pressed="false">裁剪</button>
+        </div>
+        <p class="hint" style="margin-top:12px;margin-bottom:0">自适应保留黑边不裁切；拉伸铺满屏幕；裁剪放大画面并隐藏边缘。</p>
+      </div>
+
+      <div class="card">
+        <h2>网络</h2>
+        <label class="field">
+          <span>拉流 User-Agent</span>
+          <input id="ua" type="text" placeholder="VLC/3.0.18 LibVLC/3.0.18" autocomplete="off" spellcheck="false" />
+        </label>
+        <div class="chips">
+          <button type="button" data-ua="vlc">VLC</button>
+          <button type="button" data-ua="browser">浏览器</button>
+          <button type="button" data-ua="default">恢复默认</button>
+        </div>
+        <p class="hint">返回 403 时优先切换为浏览器 UA；源站要求的其它 UA 可直接填写。</p>
+        <label class="field" style="margin-bottom:0">
+          <span>EPG 接口地址（可选）</span>
+          <input id="epg" type="url" placeholder="http://example.com/epg.xml" autocomplete="off" />
+        </label>
+      </div>
+
+      <button class="btn primary block" id="saveBtn" type="button">
+        保存设置<span class="save-state" id="saveState" hidden>未保存</span>
+      </button>
+    </section>
+
+    <section class="panel" data-panel="system" role="tabpanel">
+      <div class="card">
+        <h2>设备信息</h2>
+        <dl class="kv">
+          <div><dt>访问地址</dt><dd id="sysAddr">—</dd></div>
+          <div><dt>应用版本</dt><dd id="sysVersion">—</dd></div>
+          <div><dt>频道 / 订阅源</dt><dd id="sysCounts">—</dd></div>
+          <div><dt>电视内存</dt><dd id="sysMem">—</dd></div>
+        </dl>
+      </div>
+
+      <div class="card">
+        <h2>配置备份</h2>
+        <p class="hint">导出订阅源与播放设置，换设备或重装后可直接导入。</p>
+        <div class="btn-row">
+          <button class="btn ghost" id="exportBtn" type="button">
+            <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+            导出 JSON
+          </button>
+          <button class="btn ghost" id="importBtn" type="button">
+            <svg viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/></svg>
+            导入 JSON
+          </button>
+        </div>
+        <input type="file" id="importFile" accept="application/json,.json" hidden />
+      </div>
+
+      <div class="card">
+        <h2>维护</h2>
+        <p class="hint">按顺序重新拉取全部订阅源，老电视上可能需要几分钟。</p>
+        <button class="btn ghost block" id="refreshAllBtn2" type="button">刷新全部订阅源</button>
+      </div>
+
+      <p class="footer" id="footerVer">LeanTV · 局域网配置页</p>
+    </section>
+  </main>
+</div>
+
+<div class="modal" id="srcModal" hidden>
+  <div class="modal-mask" data-close="srcModal"></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="srcModalTitle">
+    <div class="modal-head">
+      <h3 id="srcModalTitle">添加订阅源</h3>
+      <button class="icon-btn" type="button" data-close="srcModal" aria-label="关闭">
+        <svg viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+      </button>
     </div>
-    <ul class="sources" id="sources"></ul>
-    <form class="form" id="addForm">
-      <input id="srcName" type="text" placeholder="名称（可选）" autocomplete="off" />
-      <input id="srcUrl" type="url" placeholder="http://example.com/live.m3u" required />
-      <div class="row">
-        <select id="srcType">
+    <form id="srcForm">
+      <label class="field">
+        <span>名称（可选）</span>
+        <input id="mName" type="text" placeholder="例如：央视源" autocomplete="off" />
+      </label>
+      <label class="field">
+        <span>订阅地址</span>
+        <input id="mUrl" type="url" placeholder="http://example.com/live.m3u" required autocomplete="off" spellcheck="false" />
+      </label>
+      <label class="field">
+        <span>格式</span>
+        <select id="mType">
           <option value="AUTO">自动识别</option>
           <option value="M3U">M3U / M3U8</option>
           <option value="TXT">TXT</option>
         </select>
-        <button class="primary" type="submit">添加并刷新</button>
+      </label>
+      <div class="btn-row">
+        <button class="btn" type="button" data-close="srcModal">取消</button>
+        <button class="btn primary" type="submit" id="mSave">保存</button>
       </div>
     </form>
-  </section>
-
-  <section class="card">
-    <h2>基础设置</h2>
-    <label class="field">
-      <span>EPG 接口地址</span>
-      <input id="epg" type="url" placeholder="http://example.com/epg.xml" autocomplete="off" />
-    </label>
-    <label class="field">
-      <span>默认解码方式</span>
-      <select id="decoder">
-        <option value="auto">自动（内存不足时软解）</option>
-        <option value="hw">硬解优先</option>
-        <option value="sw">强制软解</option>
-      </select>
-    </label>
-    <label class="field">
-      <span>拉流 User-Agent</span>
-      <input id="ua" type="text" placeholder="VLC/3.0.18 LibVLC/3.0.18" autocomplete="off" />
-    </label>
-    <p class="hint">部分源站会拦截播放器默认 UA 并返回 403，可改为浏览器 UA 试试。</p>
-    <button class="primary block" id="saveBtn" type="button">保存设置</button>
-  </section>
-
-  <footer class="muted">修改会立即写入电视端，无需重启应用。</footer>
+  </div>
 </div>
-<div class="toast" id="toast"></div>
+
+<div class="modal" id="confirmModal" hidden>
+  <div class="modal-mask" data-close="confirmModal"></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <div class="modal-head">
+      <h3 id="confirmTitle">请确认</h3>
+      <button class="icon-btn" type="button" data-close="confirmModal" aria-label="关闭">
+        <svg viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+      </button>
+    </div>
+    <p id="confirmText"></p>
+    <div class="btn-row">
+      <button class="btn" type="button" data-close="confirmModal">取消</button>
+      <button class="btn danger" type="button" id="confirmOk">确认</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
 
 <script>
 (function () {
   'use strict';
 
-  var state = { sources: [] };
-  var toastTimer = null;
+  var UA_VLC = 'VLC/3.0.18 LibVLC/3.0.18';
+  var UA_BROWSER = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+    '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+  var BUFFER_HINTS = {
+    fast: '缓冲 8–25 秒，起播最快，适合网络稳定、内存紧张的设备。',
+    balanced: '缓冲 15–50 秒，兼顾起播速度与抗卡顿。',
+    stable: '缓冲 25–80 秒，适合网络波动大的源，占用内存更高。'
+  };
+
+  var state = {
+    sources: [],
+    settings: { decoder: 'auto', buffer: 'balanced', aspect: 'fit' },
+    status: null,
+    editing: null,
+    confirmAction: null,
+    toastTimer: null
+  };
 
   function $(id) { return document.getElementById(id); }
+
+  function api(path, options) {
+    return fetch(path, options).then(function (res) {
+      return res.text().then(function (text) {
+        var body = {};
+        try { body = text ? JSON.parse(text) : {}; } catch (e) { body = {}; }
+        if (!res.ok || body.ok === false) {
+          throw new Error(body.error || ('请求失败 HTTP ' + res.status));
+        }
+        return body.data;
+      });
+    });
+  }
+
+  function postJSON(path, payload) {
+    return api(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  }
 
   function toast(message, isError) {
     var el = $('toast');
     el.textContent = message;
     el.className = 'toast show' + (isError ? ' error' : '');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { el.className = 'toast'; }, 2600);
+    clearTimeout(state.toastTimer);
+    state.toastTimer = setTimeout(function () { el.className = 'toast'; }, 2800);
   }
 
-  function api(path, options) {
-    return fetch(path, options).then(function (res) {
-      return res.json().catch(function () { return {}; }).then(function (data) {
-        if (!res.ok || data.ok === false) {
-          throw new Error(data.error || ('请求失败 HTTP ' + res.status));
-        }
-        return data.data;
-      });
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function (resolve, reject) {
+      var area = document.createElement('textarea');
+      area.value = text;
+      area.setAttribute('readonly', '');
+      area.style.position = 'fixed';
+      area.style.opacity = '0';
+      document.body.appendChild(area);
+      area.select();
+      try {
+        document.execCommand('copy') ? resolve() : reject(new Error('copy failed'));
+      } catch (e) {
+        reject(e);
+      } finally {
+        document.body.removeChild(area);
+      }
     });
   }
 
-  function fmtTime(ts) {
-    if (!ts) return '未更新';
-    return new Date(ts).toLocaleString();
+  function fmtMb(mb) {
+    if (!mb && mb !== 0) return '—';
+    return mb >= 1024 ? (mb / 1024).toFixed(1) + ' GB' : mb + ' MB';
   }
+
+  function fmtRelative(ts) {
+    if (!ts) return '从未更新';
+    var diff = Math.max(Date.now() - ts, 0);
+    var min = Math.floor(diff / 60000);
+    if (min < 1) return '刚刚更新';
+    if (min < 60) return min + ' 分钟前更新';
+    var hour = Math.floor(min / 60);
+    if (hour < 24) return hour + ' 小时前更新';
+    var day = Math.floor(hour / 24);
+    if (day < 30) return day + ' 天前更新';
+    return new Date(ts).toLocaleDateString();
+  }
+
+  function guessName(url) {
+    var host = url.replace(/^https?:\/\//i, '').split('/')[0];
+    return host || '订阅源';
+  }
+
+  function setOnline(online) {
+    var chip = $('onlineChip');
+    chip.className = 'chip ' + (online ? 'online' : 'offline');
+    $('onlineText').textContent = online ? '在线' : '离线';
+    if (!online) $('hostLine').textContent = '无法连接电视端，请确认在同一局域网';
+  }
+
+  function setSegment(id, value) {
+    var group = $(id);
+    var buttons = group.querySelectorAll('button');
+    for (var i = 0; i < buttons.length; i++) {
+      var on = buttons[i].getAttribute('data-value') === value;
+      buttons[i].className = on ? 'on' : '';
+      buttons[i].setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+  }
+
+  function bindSegment(id, key, onChange) {
+    $(id).addEventListener('click', function (event) {
+      var btn = event.target.closest ? event.target.closest('button[data-value]') : null;
+      if (!btn) return;
+      var value = btn.getAttribute('data-value');
+      state.settings[key] = value;
+      setSegment(id, value);
+      markDirty();
+      if (onChange) onChange(value);
+    });
+  }
+
+  function markDirty() { $('saveState').hidden = false; }
+  function clearDirty() { $('saveState').hidden = true; }
+
+  function openModal(id) {
+    $(id).hidden = false;
+    document.body.classList.add('modal-open');
+  }
+
+  function closeModal(id) {
+    $(id).hidden = true;
+    var open = document.querySelector('.modal:not([hidden])');
+    if (!open) document.body.classList.remove('modal-open');
+  }
+
+  function askConfirm(text, action) {
+    state.confirmAction = action;
+    $('confirmText').textContent = text;
+    openModal('confirmModal');
+  }
+
+  /* ---------- 订阅源 ---------- */
 
   function renderSources() {
     var list = $('sources');
     list.innerHTML = '';
-    $('sourceHint').textContent = state.sources.length ? state.sources.length + ' 个' : '';
-    if (!state.sources.length) {
-      var empty = document.createElement('li');
-      empty.className = 'empty';
-      empty.textContent = '还没有订阅源，先添加一个 M3U 或 TXT 地址';
-      list.appendChild(empty);
-      return;
-    }
+    $('srcCount').textContent = state.sources.length ? '（' + state.sources.length + '）' : '';
+    $('srcEmpty').hidden = state.sources.length > 0;
+
     state.sources.forEach(function (src) {
       var li = document.createElement('li');
       li.className = 'source';
 
-      var info = document.createElement('div');
-      info.className = 'info';
+      var head = document.createElement('div');
+      head.className = 'src-head';
 
-      var name = document.createElement('div');
-      name.className = 'name';
+      var name = document.createElement('span');
+      name.className = 'src-name';
       name.textContent = src.name || src.url;
+      name.title = src.name || src.url;
 
-      var meta = document.createElement('div');
-      meta.className = 'muted small';
-      meta.textContent = (src.type || 'AUTO') + ' · ' + fmtTime(src.lastUpdate);
+      var badge = document.createElement('span');
+      badge.className = 'badge';
+      badge.textContent = src.type || 'AUTO';
 
-      var url = document.createElement('div');
-      url.className = 'muted small ellipsis';
+      head.appendChild(name);
+      head.appendChild(badge);
+
+      var url = document.createElement('p');
+      url.className = 'src-url';
       url.textContent = src.url;
 
-      info.appendChild(name);
-      info.appendChild(meta);
-      info.appendChild(url);
+      var foot = document.createElement('div');
+      foot.className = 'src-foot';
+
+      var meta = document.createElement('span');
+      meta.className = 'src-meta';
+      var dot = document.createElement('i');
+      dot.className = src.lastUpdate ? 'ok' : 'none';
+      var metaText = document.createElement('span');
+      metaText.textContent = fmtRelative(src.lastUpdate);
+      if (src.lastUpdate) meta.title = new Date(src.lastUpdate).toLocaleString();
+      meta.appendChild(dot);
+      meta.appendChild(metaText);
 
       var actions = document.createElement('div');
-      actions.className = 'actions';
+      actions.className = 'src-actions';
 
-      var refresh = document.createElement('button');
-      refresh.type = 'button';
-      refresh.className = 'ghost';
-      refresh.textContent = '刷新';
+      var refresh = iconButton(
+        '刷新',
+        'M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z'
+      );
       refresh.onclick = function () { refreshSource(src, refresh); };
 
-      var del = document.createElement('button');
-      del.type = 'button';
-      del.className = 'danger';
-      del.textContent = '删除';
+      var edit = iconButton(
+        '编辑',
+        'M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z'
+      );
+      edit.onclick = function () { openEditor(src); };
+
+      var del = iconButton(
+        '删除',
+        'M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z'
+      );
+      del.className = 'icon-btn danger';
       del.onclick = function () { removeSource(src); };
 
       actions.appendChild(refresh);
+      actions.appendChild(edit);
       actions.appendChild(del);
 
-      li.appendChild(info);
-      li.appendChild(actions);
+      foot.appendChild(meta);
+      foot.appendChild(actions);
+      li.appendChild(head);
+      li.appendChild(url);
+      li.appendChild(foot);
       list.appendChild(li);
     });
   }
 
-  function loadConfig() {
-    return api('/api/config').then(function (data) {
-      state.sources = Array.isArray(data.sources) ? data.sources : [];
-      $('epg').value = data.epgUrl || '';
-      $('decoder').value = data.decoder || 'auto';
-      $('ua').value = data.userAgent || '';
-      renderSources();
-    });
+  function iconButton(label, path) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'icon-btn';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="' + path + '"/></svg>';
+    return btn;
   }
 
-  function saveSources() {
-    return api('/api/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sources: state.sources.map(function (s) {
-          return {
-            id: s.id || 0,
-            name: s.name || '',
-            url: s.url,
-            type: s.type || 'AUTO'
-          };
-        })
-      })
-    });
+  function openEditor(src) {
+    state.editing = src || null;
+    $('srcModalTitle').textContent = src ? '编辑订阅源' : '添加订阅源';
+    $('mName').value = src ? src.name || '' : '';
+    $('mUrl').value = src ? src.url : '';
+    $('mType').value = src ? src.type || 'AUTO' : 'AUTO';
+    openModal('srcModal');
+    setTimeout(function () { (src ? $('mName') : $('mUrl')).focus(); }, 60);
   }
 
-  function addSource(event) {
+  function submitSource(event) {
     event.preventDefault();
-    var url = $('srcUrl').value.trim();
-    if (!url) return;
-    var name = $('srcName').value.trim() ||
-      url.replace(/^https?:\/\//, '').split('/')[0];
+    var url = $('mUrl').value.trim();
+    if (!/^https?:\/\//i.test(url)) {
+      toast('地址需以 http:// 或 https:// 开头', true);
+      return;
+    }
+    var name = $('mName').value.trim() || guessName(url);
+    var type = $('mType').value;
 
-    state.sources.push({ id: 0, name: name, url: url, type: $('srcType').value, lastUpdate: 0 });
+    if (state.editing) {
+      state.editing.name = name;
+      state.editing.url = url;
+      state.editing.type = type;
+    } else {
+      state.sources.push({ id: 0, name: name, url: url, type: type, lastUpdate: 0 });
+    }
+
+    closeModal('srcModal');
+    persistSources('已保存，正在后台解析…');
+  }
+
+  function persistSources(message) {
     renderSources();
-
-    saveSources().then(function () {
-      $('srcUrl').value = '';
-      $('srcName').value = '';
-      return loadConfig();
-    }).then(function () {
-      toast('已添加，频道正在后台更新');
-      // 后台解析完成后回读一次，更新 lastUpdate 与频道状态
-      setTimeout(function () { loadConfig().catch(function () {}); }, 4000);
+    var payload = state.sources.map(function (s) {
+      return { id: s.id || 0, name: s.name || '', url: s.url, type: s.type || 'AUTO' };
+    });
+    return postJSON('/api/config', { sources: payload }).then(function () {
+      if (message) toast(message);
+      pollAfterRefresh();
+      return refreshSources();
     }).catch(function (err) {
       toast(err.message, true);
-      loadConfig().catch(function () {});
+      refreshSources();
     });
   }
 
   function removeSource(src) {
-    if (!confirm('确定删除「' + (src.name || src.url) + '」？')) return;
-    state.sources = state.sources.filter(function (s) { return s !== src; });
-    renderSources();
-
-    saveSources().then(function () {
-      return loadConfig();
-    }).then(function () {
-      toast('已删除');
-    }).catch(function (err) {
-      toast(err.message, true);
-      loadConfig().catch(function () {});
+    askConfirm('删除「' + (src.name || src.url) + '」及其频道？', function () {
+      state.sources = state.sources.filter(function (s) { return s !== src; });
+      persistSources('已删除');
     });
   }
 
-  function refreshSource(src, button) {
+  function refreshSource(src, btn) {
     if (!src.id) {
       toast('订阅源尚未保存', true);
       return;
     }
-    var label = button.textContent;
-    button.disabled = true;
-    button.textContent = '刷新中…';
-
-    api('/api/source/refresh', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: src.id })
-    }).then(function () {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin"></span>';
+    postJSON('/api/source/refresh', { id: src.id }).then(function () {
       toast('已开始刷新');
-      setTimeout(function () {
-        loadConfig().catch(function () {});
-        loadStatus();
-      }, 2500);
+      pollAfterRefresh();
     }).catch(function (err) {
       toast(err.message, true);
-    }).finally(function () {
-      button.disabled = false;
-      button.textContent = label;
+    }).then(function () {
+      btn.disabled = false;
+      btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>';
+    });
+  }
+
+  function refreshAll(btn) {
+    btn.disabled = true;
+    postJSON('/api/source/refresh-all', {}).then(function (data) {
+      toast(data.count ? '已开始刷新 ' + data.count + ' 个源' : '还没有订阅源', !data.count);
+      if (data.count) pollAfterRefresh();
+    }).catch(function (err) {
+      toast(err.message, true);
+    }).then(function () {
+      btn.disabled = false;
+    });
+  }
+
+  function pollAfterRefresh() {
+    [3000, 9000, 18000].forEach(function (delay) {
+      setTimeout(function () {
+        refreshSources();
+        loadStatus();
+      }, delay);
+    });
+  }
+
+  function refreshSources() {
+    return api('/api/config').then(function (cfg) {
+      state.sources = (cfg.sources || []).slice();
+      renderSources();
+    }).catch(function () {});
+  }
+
+  /* ---------- 设置 ---------- */
+
+  function loadConfig() {
+    return api('/api/config').then(function (cfg) {
+      state.sources = (cfg.sources || []).slice();
+      state.settings.decoder = cfg.decoder || 'auto';
+      state.settings.buffer = cfg.bufferProfile || 'balanced';
+      state.settings.aspect = cfg.aspectMode || 'fit';
+      $('ua').value = cfg.userAgent || '';
+      $('epg').value = cfg.epgUrl || '';
+      setSegment('decoderGroup', state.settings.decoder);
+      setSegment('bufferGroup', state.settings.buffer);
+      setSegment('aspectGroup', state.settings.aspect);
+      $('bufferHint').textContent = BUFFER_HINTS[state.settings.buffer] || '';
+      renderSources();
+      clearDirty();
     });
   }
 
   function saveSettings() {
-    var button = $('saveBtn');
-    button.disabled = true;
-    api('/api/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        epgUrl: $('epg').value.trim(),
-        decoder: $('decoder').value,
-        userAgent: $('ua').value.trim()
-      })
+    var btn = $('saveBtn');
+    btn.disabled = true;
+    postJSON('/api/config', {
+      epgUrl: $('epg').value.trim(),
+      decoder: state.settings.decoder,
+      userAgent: $('ua').value.trim(),
+      bufferProfile: state.settings.buffer,
+      aspectMode: state.settings.aspect
     }).then(function () {
       toast('设置已保存');
+      clearDirty();
+      loadStatus();
     }).catch(function (err) {
       toast(err.message, true);
-    }).finally(function () {
-      button.disabled = false;
+    }).then(function () {
+      btn.disabled = false;
     });
   }
 
+  /* ---------- 状态 ---------- */
+
   function loadStatus() {
-    return api('/api/status').then(function (data) {
-      $('host').textContent = 'http://' + data.ip + ':' + data.port + ' · 电视端在线';
-      $('mem').textContent = data.usedMb + ' MB';
-      $('memAvail').textContent = data.availMb + ' MB';
-      $('channels').textContent = data.channelCount;
-      $('sourceCount').textContent = data.sourceCount;
-      $('dot').classList.add('online');
+    return api('/api/status').then(function (s) {
+      state.status = s;
+      setOnline(true);
+      var address = 'http://' + s.ip + ':' + s.port;
+      $('addr').textContent = s.ip + ':' + s.port;
+      $('hostLine').textContent = '电视端在线 · ' + address;
+      $('channels').textContent = s.channelCount;
+      $('sourceCount').textContent = s.sourceCount;
+      $('mem').textContent = s.usedMb + ' MB';
+      $('version').textContent = 'v' + s.version;
+
+      var total = s.totalMb || 0;
+      var avail = s.availMb || 0;
+      var used = Math.max(total - avail, 0);
+      var pct = total ? Math.round(used * 100 / total) : 0;
+      $('memBar').style.width = pct + '%';
+      $('memBar').className = pct >= 85 ? 'warn' : '';
+      $('memText').textContent = fmtMb(used) + ' / ' + fmtMb(total) + ' · ' + pct + '%';
+
+      $('sysAddr').textContent = address;
+      $('sysVersion').textContent = 'v' + s.version;
+      $('sysCounts').textContent = s.channelCount + ' / ' + s.sourceCount;
+      $('sysMem').textContent = '可用 ' + fmtMb(avail) + '，应用占用 ' + s.usedMb + ' MB';
+      $('footerVer').textContent = 'LeanTV v' + s.version + ' · 局域网配置页';
     }).catch(function () {
-      $('host').textContent = '连接电视端失败，请确认在同一局域网';
-      $('dot').classList.remove('online');
+      setOnline(false);
+    });
+  }
+
+  /* ---------- 备份 ---------- */
+
+  function exportConfig() {
+    var payload = {
+      app: 'LeanTV',
+      version: state.status ? state.status.version : '',
+      exportedAt: new Date().toISOString(),
+      settings: {
+        epgUrl: $('epg').value.trim(),
+        decoder: state.settings.decoder,
+        userAgent: $('ua').value.trim(),
+        bufferProfile: state.settings.buffer,
+        aspectMode: state.settings.aspect
+      },
+      sources: state.sources.map(function (s) {
+        return { name: s.name || '', url: s.url, type: s.type || 'AUTO' };
+      })
+    };
+    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var date = new Date();
+    var name = 'leantv-config-' + date.getFullYear() +
+      ('0' + (date.getMonth() + 1)).slice(-2) + ('0' + date.getDate()).slice(-2) + '.json';
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    toast('已导出 ' + name);
+  }
+
+  function importConfig(file) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      var data;
+      try {
+        data = JSON.parse(String(reader.result));
+      } catch (e) {
+        toast('文件不是有效的 JSON', true);
+        return;
+      }
+      var sources = Array.isArray(data.sources) ? data.sources : [];
+      if (!sources.length) {
+        toast('文件中没有订阅源', true);
+        return;
+      }
+      askConfirm('导入将覆盖当前订阅源与播放设置，确定继续？', function () {
+        applyImport(data.settings || {}, sources);
+      });
+    };
+    reader.onerror = function () { toast('读取文件失败', true); };
+    reader.readAsText(file);
+  }
+
+  function applyImport(settings, sources) {
+    var body = {
+      sources: sources.map(function (s) {
+        return { id: 0, name: s.name || '', url: s.url, type: s.type || 'AUTO' };
+      }).filter(function (s) { return /^https?:\/\//i.test(s.url); }),
+      epgUrl: settings.epgUrl || '',
+      decoder: settings.decoder || 'auto',
+      userAgent: settings.userAgent || '',
+      bufferProfile: settings.bufferProfile || 'balanced',
+      aspectMode: settings.aspectMode || 'fit'
+    };
+    if (!body.sources.length) {
+      toast('文件中没有有效地址', true);
+      return;
+    }
+    postJSON('/api/config', body).then(function () {
+      toast('导入成功，正在后台解析…');
+      return loadConfig();
+    }).then(function () {
+      pollAfterRefresh();
+    }).catch(function (err) {
+      toast(err.message, true);
+    });
+  }
+
+  /* ---------- 初始化 ---------- */
+
+  function switchTab(name) {
+    var tabs = document.querySelectorAll('.tab');
+    for (var i = 0; i < tabs.length; i++) {
+      tabs[i].className = tabs[i].getAttribute('data-tab') === name ? 'tab on' : 'tab';
+    }
+    var panels = document.querySelectorAll('.panel');
+    for (var j = 0; j < panels.length; j++) {
+      panels[j].className = panels[j].getAttribute('data-panel') === name ? 'panel on' : 'panel';
+    }
+  }
+
+  function bindUI() {
+    document.querySelector('.tabs').addEventListener('click', function (event) {
+      var tab = event.target.closest ? event.target.closest('.tab') : null;
+      if (tab) switchTab(tab.getAttribute('data-tab'));
+    });
+
+    bindSegment('decoderGroup', 'decoder');
+    bindSegment('bufferGroup', 'buffer', function (value) {
+      $('bufferHint').textContent = BUFFER_HINTS[value] || '';
+    });
+    bindSegment('aspectGroup', 'aspect');
+
+    $('ua').addEventListener('input', markDirty);
+    $('epg').addEventListener('input', markDirty);
+    $('saveBtn').addEventListener('click', saveSettings);
+
+    document.querySelector('.chips').addEventListener('click', function (event) {
+      var btn = event.target.closest ? event.target.closest('button[data-ua]') : null;
+      if (!btn) return;
+      var kind = btn.getAttribute('data-ua');
+      $('ua').value = kind === 'vlc' ? UA_VLC : kind === 'browser' ? UA_BROWSER : UA_VLC;
+      markDirty();
+    });
+
+    $('copyAddr').addEventListener('click', function () {
+      var text = state.status ? 'http://' + state.status.ip + ':' + state.status.port : $('addr').textContent;
+      copyText(text).then(function () {
+        toast('地址已复制');
+      }).catch(function () {
+        toast('复制失败，请手动选择地址', true);
+      });
+    });
+
+    $('addSrcBtn').addEventListener('click', function () { openEditor(null); });
+    $('emptyAddBtn').addEventListener('click', function () { openEditor(null); });
+    $('srcForm').addEventListener('submit', submitSource);
+    $('refreshAllBtn').addEventListener('click', function () { refreshAll(this); });
+    $('refreshAllBtn2').addEventListener('click', function () { refreshAll(this); });
+
+    $('exportBtn').addEventListener('click', exportConfig);
+    $('importBtn').addEventListener('click', function () { $('importFile').click(); });
+    $('importFile').addEventListener('change', function () {
+      var file = this.files && this.files[0];
+      this.value = '';
+      if (file) importConfig(file);
+    });
+
+    $('confirmOk').addEventListener('click', function () {
+      var action = state.confirmAction;
+      state.confirmAction = null;
+      closeModal('confirmModal');
+      if (action) action();
+    });
+
+    var closers = document.querySelectorAll('[data-close]');
+    for (var i = 0; i < closers.length; i++) {
+      closers[i].addEventListener('click', function () {
+        closeModal(this.getAttribute('data-close'));
+      });
+    }
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') {
+        var open = document.querySelector('.modal:not([hidden])');
+        if (open) closeModal(open.id);
+      }
     });
   }
 
   document.addEventListener('DOMContentLoaded', function () {
-    $('addForm').addEventListener('submit', addSource);
-    $('saveBtn').addEventListener('click', saveSettings);
-    loadStatus();
+    bindUI();
     loadConfig().catch(function (err) { toast(err.message, true); });
-    setInterval(loadStatus, 5000);
+    loadStatus();
+    setInterval(function () {
+      if (!document.hidden) loadStatus();
+    }, 5000);
+    setInterval(function () {
+      if (!document.hidden) refreshSources();
+    }, 20000);
   });
 })();
 </script>

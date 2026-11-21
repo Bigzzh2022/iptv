@@ -4,6 +4,8 @@ import android.app.ActivityManager
 import android.content.Context
 import com.lean.tv.App
 import com.lean.tv.BuildConfig
+import com.lean.tv.data.AspectMode
+import com.lean.tv.data.BufferProfile
 import com.lean.tv.data.ConfigStore
 import com.lean.tv.data.DecoderMode
 import com.lean.tv.data.SourceInput
@@ -37,6 +39,7 @@ class ApiRouter(private val context: Context) {
             method == Method.GET && uri == "/api/status" -> getStatus()
             method == Method.POST && uri == "/api/config" -> postConfig(session)
             method == Method.POST && uri == "/api/source/refresh" -> postRefresh(session)
+            method == Method.POST && uri == "/api/source/refresh-all" -> postRefreshAll()
             else -> error(Response.Status.NOT_FOUND, "接口不存在")
         }
     }
@@ -60,6 +63,8 @@ class ApiRouter(private val context: Context) {
                 put("epgUrl", ConfigStore.epgUrl)
                 put("decoder", ConfigStore.decoderMode)
                 put("userAgent", ConfigStore.userAgent)
+                put("bufferProfile", ConfigStore.bufferProfile)
+                put("aspectMode", ConfigStore.aspectMode)
                 put("sources", JSONArray().apply {
                     sources.forEach { source ->
                         put(JSONObject().apply {
@@ -123,6 +128,14 @@ class ApiRouter(private val context: Context) {
         if (json.has("userAgent")) {
             ConfigStore.userAgent = json.optString("userAgent")
         }
+        if (json.has("bufferProfile")) {
+            val profile = json.optString("bufferProfile").trim()
+            if (BufferProfile.isValid(profile)) ConfigStore.bufferProfile = profile
+        }
+        if (json.has("aspectMode")) {
+            val aspect = json.optString("aspectMode").trim()
+            if (AspectMode.isValid(aspect)) ConfigStore.aspectMode = aspect
+        }
         if (json.has("sources")) {
             val inputs = parseSources(json.optJSONArray("sources") ?: JSONArray())
             val refreshIds = runBlocking { App.repository.syncSources(inputs) }
@@ -154,6 +167,20 @@ class ApiRouter(private val context: Context) {
             App.repository.refreshSource(source)
         }
         return ok(JSONObject().apply { put("started", true) })
+    }
+
+    /** 依次刷新所有订阅源，避免同时下载拖垮老电视。 */
+    private fun postRefreshAll(): HttpResult {
+        val count = runBlocking { App.repository.sourceCount() }
+        if (count > 0) {
+            App.appScope.launch {
+                App.repository.sources().forEach { App.repository.refreshSource(it) }
+            }
+        }
+        return ok(JSONObject().apply {
+            put("started", true)
+            put("count", count)
+        })
     }
 
     private fun parseSources(array: JSONArray): List<SourceInput> {
