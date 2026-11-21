@@ -1,18 +1,21 @@
 package com.lean.tv.parser
 
+import java.io.BufferedReader
+
 /**
  * M3U / M3U8 直播源解析。
- * 仅做逐行状态机，避免整文件正则导致的 OOM。
+ * 逐行状态机读取，不把整个文件载入内存。
  */
 object M3uParser : PlaylistParser {
 
     private val ATTR_REGEX = Regex("""([A-Za-z0-9-]+)="([^"]*)"""")
 
-    override fun parse(content: String): List<ParsedChannel> {
+    override fun parse(reader: BufferedReader): List<ParsedChannel> {
         val channels = ArrayList<ParsedChannel>(256)
         var pending: ParsedChannel? = null
 
-        content.lineSequence().forEach { raw ->
+        var raw = reader.readLine()
+        while (raw != null) {
             val line = raw.trim()
             when {
                 line.isEmpty() -> Unit
@@ -24,7 +27,7 @@ object M3uParser : PlaylistParser {
                 line.startsWith("#") -> Unit
 
                 pending != null -> {
-                    channels.add(pending!!.copy(url = line))
+                    channels.add(pending.copy(url = line))
                     pending = null
                 }
 
@@ -39,6 +42,7 @@ object M3uParser : PlaylistParser {
                     )
                 }
             }
+            raw = reader.readLine()
         }
         return channels
     }

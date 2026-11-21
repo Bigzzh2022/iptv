@@ -12,7 +12,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import okhttp3.Request
+import java.io.BufferedInputStream
+import java.io.BufferedReader
+import java.io.FilterInputStream
+import java.io.IOException
+import java.io.InputStream
+import java.io.InputStreamReader
 import java.nio.ByteBuffer
+import java.nio.CharBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.Charset
 import java.nio.charset.CodingErrorAction
@@ -149,58 +156,147 @@ class ChannelRepository(private val db: AppDatabase) {
         }
     }
 
-    /** 下载并解析；下载失败返回 null，内容为空返回空列表。 */
+    /**
+     * 下载并逐行解析；下载失败返回 null，内容为空返回空列表。
+     * 全程流式读取，不把整个订阅源解码成字符串，显著降低大源的内存峰值。
+     */
     private fun downloadAndParse(source: SourceEntity): List<ParsedChannel>? {
-        val text = try {
-            fetchText(source.url)
-        } catch (e: Exception) {
-            Log.w(TAG, "下载订阅源失败: ${source.url}", e)
-            null
-        } ?: return null
-
-        val parser: PlaylistParser = when {
-            text.contains("#EXTM3U", ignoreCase = true) -> M3uParser
-            source.type.equals("M3U", ignoreCase = true) -> M3uParser
-            else -> TxtParser
-        }
-        return parser.parse(text)
-    }
-
-    private fun fetchText(url: String): String? {
         val request = Request.Builder()
-            .url(url)
+            .url(source.url)
             .header("User-Agent", ConfigStore.userAgent)
             .build()
 
-        Http.client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                Log.w(TAG, "订阅源 HTTP ${response.code}: $url")
-                return null
+        return try {
+            Http.client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    Log.w(TAG, "订阅源 HTTP ${response.code}: ${source.url}")
+                    return null
+                }
+                val body = response.body ?: return null
+                if (body.contentLength() > MAX_SOURCE_BYTES) {
+                    Log.w(TAG, "订阅源超过 32 MB: ${source.url}")
+                    return null
+                }
+
+                body.byteStream().use { raw ->
+                    val bounded = BoundedInputStream(raw, MAX_SOURCE_BYTES)
+                    val buffered = BufferedInputStream(bounded, SNIFF_BYTES)
+                    val sniff = sniff(buffered, source)
+                    BufferedReader(
+                        InputStreamReader(buffered, sniff.charset),
+                        LINE_BUFFER
+                    ).use { reader ->
+                        sniff.parser.parse(reader)
+                    }
+                }
             }
-            val body = response.body ?: return null
-            if (body.contentLength() > MAX_SOURCE_BYTES) return null
-            val bytes = body.bytes()
-            if (bytes.isEmpty() || bytes.size > MAX_SOURCE_BYTES) return null
-            return decode(bytes)
+        } catch (e: Exception) {
+            Log.w(TAG, "下载订阅源失败: ${source.url}", e)
+            null
         }
     }
 
+    private class SniffResult(val charset: Charset, val parser: PlaylistParser)
+
     /**
-     * 中文直播源常见 GBK 编码：先按严格 UTF-8 解码，失败再回退 GBK。
+     * 读取文件头部用于判断编码和格式，随后 reset 回起点，交给解析器重新读取。
      */
-    private fun decode(bytes: ByteArray): String {
+    private fun sniff(input: BufferedInputStream, source: SourceEntity): SniffResult {
+        input.mark(SNIFF_BYTES + 8)
+        val sample = ByteArray(SNIFF_BYTES)
+        var length = 0
+        while (length < sample.size) {
+            val read = input.read(sample, length, sample.size - length)
+            if (read < 0) break
+            length += read
+        }
+        input.reset()
+
+        val charset = detectCharset(sample, length)
+        val bomLength = when {
+            charset == Charsets.UTF_16LE || charset == Charsets.UTF_16BE -> 2
+            length >= 3 &&
+                sample[0] == 0xEF.toByte() &&
+                sample[1] == 0xBB.toByte() &&
+                sample[2] == 0xBF.toByte() -> 3
+            else -> 0
+        }
+        if (bomLength > 0) input.skip(bomLength.toLong())
+
+        val head = if (length > 0) String(sample, 0, length, charset) else ""
+        val parser = when {
+            head.contains("#EXTM3U", ignoreCase = true) -> M3uParser
+            source.type.equals("M3U", ignoreCase = true) ||
+                source.type.equals("M3U8", ignoreCase = true) -> M3uParser
+            else -> TxtParser
+        }
+        return SniffResult(charset, parser)
+    }
+
+    /**
+     * 中文直播源常见 GBK 编码：先按严格 UTF-8 解码样本，失败再回退 GBK。
+     * 样本末尾可能截断多字节字符，因此不要求 endOfInput。
+     */
+    private fun detectCharset(sample: ByteArray, length: Int): Charset {
+        if (length >= 2) {
+            val b0 = sample[0].toInt() and 0xFF
+            val b1 = sample[1].toInt() and 0xFF
+            if (b0 == 0xFF && b1 == 0xFE) return Charsets.UTF_16LE
+            if (b0 == 0xFE && b1 == 0xFF) return Charsets.UTF_16BE
+        }
         val decoder = Charsets.UTF_8.newDecoder()
             .onMalformedInput(CodingErrorAction.REPORT)
             .onUnmappableCharacter(CodingErrorAction.REPORT)
         return try {
-            decoder.decode(ByteBuffer.wrap(bytes)).toString()
+            decoder.decode(
+                ByteBuffer.wrap(sample, 0, length),
+                CharBuffer.allocate(length + 1),
+                false
+            )
+            Charsets.UTF_8
         } catch (e: CharacterCodingException) {
-            String(bytes, Charset.forName("GBK"))
+            Charset.forName("GBK")
+        }
+    }
+
+    /** 限制读取字节数，防止超大或无限流把电视内存吃满。 */
+    private class BoundedInputStream(
+        input: InputStream,
+        private val limit: Long
+    ) : FilterInputStream(input) {
+
+        private var count = 0L
+
+        override fun read(): Int {
+            val value = super.read()
+            if (value >= 0) checkLimit(1)
+            return value
+        }
+
+        override fun read(b: ByteArray, off: Int, len: Int): Int {
+            val read = super.read(b, off, len)
+            if (read > 0) checkLimit(read.toLong())
+            return read
+        }
+
+        override fun skip(n: Long): Long {
+            val skipped = super.skip(n)
+            if (skipped > 0) checkLimit(skipped)
+            return skipped
+        }
+
+        private fun checkLimit(delta: Long) {
+            count += delta
+            if (count > limit) {
+                throw IOException("订阅源超过 ${limit / 1024 / 1024} MB")
+            }
         }
     }
 
     private companion object {
         const val TAG = "ChannelRepository"
         const val MAX_SOURCE_BYTES = 32L * 1024 * 1024
+        const val SNIFF_BYTES = 16 * 1024
+        const val LINE_BUFFER = 16 * 1024
     }
 }
